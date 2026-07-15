@@ -1,0 +1,35 @@
+# Rust build
+/target
+**/*.rs.bk
+*.pdb
+
+# Build/test scratch
+nohup.out
+/smoke/
+migration-report.json
+
+# Local config / data
+/rgit.local.toml
+/data/
+/logs/
+*.db
+*.db-wal
+*.db-shm
+
+# Backup worktree (mirrors rblog convention)
+.backup-worktree/
+
+# Flutter / Dart build
+web/.dart_tool/
+web/.flutter-plugins
+web/.flutter-plugins-dependencies
+web/build/
+web/.pub-cache/
+web/.pub/
+web/.gradle/
+web/coverage/
+
+# IDE
+.idea/
+*.iml
+.vscode/

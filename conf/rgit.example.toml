@@ -1,0 +1,59 @@
+# rgit 配置样例（部署时拷到 /opt/usr/local/rgit/conf/rgit.toml，权限 0600）。
+# 加载顺序：内置默认 → ./rgit.toml → $RGIT_CONFIG 指定文件 → 环境变量。
+# 环境变量覆盖：RGIT__SECTION__KEY，如 RGIT__HTTP__BIND=0.0.0.0:8000。
+
+[http]
+# nginx 反代的上游地址（仅本机监听）
+bind = "127.0.0.1:8000"
+# 对外访问的公开地址，用于拼 clone URL 与 LFS href
+external_url = "https://git.example.com"
+# JSON 请求体上限（字节）；git push / LFS 上传不受此限制（流式落盘）
+max_json_body = 1048576
+
+[ssh]
+enabled = true
+bind = "0.0.0.0:2222"
+# SSH host key 目录，首次启动自动生成 ed25519
+host_key_dir = "/opt/usr/local/rgit/data/ssh"
+# 页面上展示的 ssh clone 地址：ssh://git@{clone_host}:{clone_port}/ns/proj.git
+clone_host = "git.example.com"
+clone_port = 2222
+
+[db]
+path = "/opt/usr/local/rgit/data/rgit.db"
+
+[storage]
+# 与 GitLab hashed storage 逐字节兼容：@hashed/aa/bb/<sha256>.git
+repositories = "/opt/usr/local/rgit/data/repositories"
+# 与 GitLab LFS 布局兼容：aa/bb/<oid[4:]>
+lfs_objects = "/opt/usr/local/rgit/data/lfs-objects"
+
+[git]
+bin = "git"
+# 单个 git 子进程的硬超时（秒）
+timeout_secs = 3600
+
+[web]
+# Flutter build web 产物目录
+static_dir = "/opt/usr/local/rgit/bin/web"
+
+[auth]
+# 会话有效期（小时）
+session_ttl_hours = 336
+# 新密码 bcrypt cost（GitLab 迁移来的 cost 13 哈希验证不受影响）
+bcrypt_cost = 12
+# 小团队默认关闭自助注册，由管理员建号
+signup_enabled = false
+min_password_length = 10
+# 登录连续失败 N 次后临时锁定
+max_login_failures = 10
+lockout_minutes = 15
+
+[lfs]
+enabled = true
+# 单个 LFS 对象大小上限（字节），0 = 不限
+max_file_size = 0
+
+[log]
+# tracing 过滤器，如 "info" 或 "rgit=debug,sqlx=warn"
+level = "info"

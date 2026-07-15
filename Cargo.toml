@@ -1,0 +1,81 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/rgit",
+    "crates/rgit-core",
+    "crates/rgit-http",
+    "crates/rgit-git",
+    "crates/rgit-ssh",
+    "crates/rgit-migrate",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+authors = ["xiedeacc"]
+repository = "https://github.com/xiedeacc/rgit"
+
+[workspace.dependencies]
+rgit-core = { path = "crates/rgit-core" }
+rgit-http = { path = "crates/rgit-http" }
+rgit-git = { path = "crates/rgit-git" }
+rgit-ssh = { path = "crates/rgit-ssh" }
+
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.8", features = ["macros", "multipart"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "trace", "compression-gzip", "limit"] }
+hyper = "1"
+http = "1"
+http-body-util = "0.1"
+
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "sqlite",
+    "chrono",
+    "macros",
+    "migrate",
+] }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+config = { version = "0.14", default-features = false, features = ["toml"] }
+
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+thiserror = "2"
+anyhow = "1"
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+
+bcrypt = "0.16"
+sha2 = "0.10"
+sha1 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+rand = "0.8"
+subtle = "2"
+
+russh = "0.49"
+ssh-key = { version = "0.6", features = ["ed25519", "rsa", "ecdsa"] }
+
+async-trait = "0.1"
+bytes = "1"
+futures = "0.3"
+tokio-util = { version = "0.7", features = ["io"] }
+async-compression = { version = "0.4", features = ["tokio", "gzip"] }
+flate2 = "1"
+mime_guess = "2"
+percent-encoding = "2"
+regex = "1"
+
+[profile.release]
+lto = "thin"
+strip = true
+codegen-units = 1
