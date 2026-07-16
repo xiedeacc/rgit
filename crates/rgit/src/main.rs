@@ -2,7 +2,7 @@
 //!
 //! Single binary that hosts:
 //!   - HTTP server (REST API + git smart HTTP + LFS + Flutter web assets)
-//!   - SSH server (git-upload-pack / git-receive-pack / git-upload-archive)
+//!   - OpenSSH authorized_keys synchronization for the rgit-shell forced command
 
 use anyhow::Context;
 use rgit_core::config::AppConfig;
