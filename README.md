@@ -8,7 +8,8 @@
   archive、fork、组与成员权限、PAT、管理面板
 - 明确不做：CI、Issue、MR、通知、Redis/PG 等重依赖（见设计文档非目标）
 - 部署：单二进制 + nginx 反代，NAS 路径 `/opt/usr/local/rgit/{bin,conf,data,logs}`
-- 备份：systemd timer 每小时镜像推送到 `github.com:xiedeacc/rgit_data`
+- 备份：systemd timer 每小时将 `bin/`、`conf/`、`data/`（不含仓库/LFS）推送到
+  `github.com:xiedeacc/rgit_data`
 
 ## 文档
 
@@ -21,11 +22,11 @@
 ## 代码结构
 
 ```
-crates/rgit           二进制入口（HTTP + SSH 同进程）
+crates/rgit           HTTP 服务与 system OpenSSH forced-command 入口
 crates/rgit-core      配置 / SQLite / 模型 / 认证 / 权限 / 存储路径
 crates/rgit-git       git 子进程封装（协议、仓库管理、只读浏览）
 crates/rgit-http      axum：REST API、git smart HTTP、LFS、静态资源
-crates/rgit-ssh       russh 内嵌 SSH 服务器（公钥认证，仅三条 git 命令）
+crates/rgit-ssh       system OpenSSH forced-command / rgit-shell 命令校验
 crates/rgit-migrate   GitLab PG → SQLite 迁移工具
 web/                  Flutter Web（GitHub 风格 UI）
 conf/  scripts/       配置样例、备份/恢复/部署脚本

@@ -10,11 +10,87 @@ use rgit_core::perm::{AccessLevel, RepoAction, Visibility};
 use rgit_core::state::AppState;
 use rgit_core::{storage, Error};
 use serde::Deserialize;
+use sqlx::{Sqlite, Transaction};
 
-use super::Pagination;
+use super::{paginated_json, Pagination};
 use crate::error::ApiResult;
 use crate::handlers::helpers::{find_project, repo_disk_path, validate_path_segment};
 use crate::middleware::auth::{Identity, RequireUser};
+
+async fn writable_namespace(
+    state: &AppState,
+    user: &User,
+    namespace_id: i64,
+) -> Result<Namespace, Error> {
+    let ns = sqlx::query_as::<_, Namespace>("SELECT * FROM namespaces WHERE id = ?1")
+        .bind(namespace_id)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or(Error::NotFound)?;
+    if user.is_admin {
+        return Ok(ns);
+    }
+
+    let allowed = match ns.kind.as_str() {
+        "user" => ns.owner_user_id == Some(user.id),
+        "group" => {
+            let level: Option<i32> = sqlx::query_scalar(
+                "SELECT access_level FROM group_members WHERE namespace_id = ?1 AND user_id = ?2",
+            )
+            .bind(ns.id)
+            .bind(user.id)
+            .fetch_optional(&state.db)
+            .await?;
+            level.unwrap_or(0) >= AccessLevel::Maintainer as i32
+        }
+        _ => false,
+    };
+    if allowed {
+        Ok(ns)
+    } else {
+        Err(Error::Forbidden)
+    }
+}
+
+async fn allocate_disk_id(tx: &mut Transaction<'_, Sqlite>) -> Result<i64, Error> {
+    Ok(sqlx::query_scalar(
+        r#"
+        INSERT INTO project_disk_id_allocations (id)
+        SELECT COALESCE(MAX(id), 0) + 1 FROM (
+            SELECT disk_id AS id FROM projects
+            UNION ALL
+            SELECT id FROM project_disk_id_allocations
+        )
+        RETURNING id
+        "#,
+    )
+    .fetch_one(&mut **tx)
+    .await?)
+}
+
+async fn reserve_disk_id(state: &AppState) -> Result<i64, Error> {
+    let mut tx = state.db.begin().await?;
+    let id = allocate_disk_id(&mut tx).await?;
+    tx.commit().await?;
+    Ok(id)
+}
+
+fn remove_new_repo(path: &std::path::Path) {
+    if let Err(error) = std::fs::remove_dir_all(path) {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            tracing::error!(%error, path = %path.display(), "failed to clean up repository");
+        }
+    }
+}
+
+fn validate_name(name: &str) -> Result<&str, Error> {
+    let name = name.trim();
+    if name.is_empty() || name.len() > 255 {
+        Err(Error::invalid("name must be between 1 and 255 bytes"))
+    } else {
+        Ok(name)
+    }
+}
 
 /// Project id or URL-encoded "ns/path".
 pub async fn locate(state: &AppState, id_or_path: &str) -> Result<Project, Error> {
@@ -42,10 +118,17 @@ async fn render(state: &AppState, project: &Project) -> Result<serde_json::Value
     let obj = v.as_object_mut().unwrap();
     obj.insert("full_path".into(), full_path.clone().into());
     obj.insert("namespace_path".into(), ns.path.clone().into());
-    obj.insert("http_clone_url".into(), format!("{http_base}/{full_path}.git").into());
+    obj.insert(
+        "http_clone_url".into(),
+        format!("{http_base}/{full_path}.git").into(),
+    );
     obj.insert(
         "ssh_clone_url".into(),
-        format!("ssh://git@{}:{}/{full_path}.git", ssh.clone_host, ssh.clone_port).into(),
+        format!(
+            "ssh://git@{}:{}/{full_path}.git",
+            ssh.clone_host, ssh.clone_port
+        )
+        .into(),
     );
     Ok(v)
 }
@@ -54,8 +137,9 @@ async fn render(state: &AppState, project: &Project) -> Result<serde_json::Value
 pub struct ListQuery {
     #[serde(default)]
     pub search: Option<String>,
-    #[serde(flatten)]
-    pub page: Pagination,
+    pub visibility: Option<i32>,
+    pub page: Option<u32>,
+    pub per_page: Option<u32>,
 }
 
 /// GET /api/v1/projects — projects visible to the caller.
@@ -64,12 +148,38 @@ pub async fn list(
     identity: Identity,
     Query(q): Query<ListQuery>,
 ) -> ApiResult<Response> {
+    let page = Pagination::from_options(q.page, q.per_page);
     let (visible_floor, user_id, is_admin) = match &identity.user {
         Some(u) if u.is_admin => (Visibility::Private as i32, u.id, true),
         Some(u) => (Visibility::Internal as i32, u.id, false),
         None => (Visibility::Public as i32, -1, false),
     };
     let search = format!("%{}%", q.search.as_deref().unwrap_or("").replace('%', ""));
+    if q.visibility
+        .is_some_and(|value| !matches!(value, 0 | 10 | 20))
+    {
+        return Err(Error::invalid("visibility must be 0, 10, or 20").into());
+    }
+
+    let total: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(DISTINCT p.id) FROM projects p
+        LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = ?2
+        LEFT JOIN group_members gm ON gm.namespace_id = p.namespace_id AND gm.user_id = ?2
+        LEFT JOIN namespaces n ON n.id = p.namespace_id
+        WHERE (?4 OR p.visibility >= ?1 OR pm.user_id IS NOT NULL
+               OR gm.user_id IS NOT NULL OR n.owner_user_id = ?2)
+          AND (p.name LIKE ?3 OR p.path LIKE ?3 OR p.description LIKE ?3)
+          AND (?5 IS NULL OR p.visibility = ?5)
+        "#,
+    )
+    .bind(visible_floor)
+    .bind(user_id)
+    .bind(&search)
+    .bind(is_admin)
+    .bind(q.visibility)
+    .fetch_one(&state.db)
+    .await?;
 
     // Visible = public/internal floor OR any membership/ownership path.
     let rows = sqlx::query_as::<_, Project>(
@@ -81,16 +191,18 @@ pub async fn list(
         WHERE (?4 OR p.visibility >= ?1 OR pm.user_id IS NOT NULL
                OR gm.user_id IS NOT NULL OR n.owner_user_id = ?2)
           AND (p.name LIKE ?3 OR p.path LIKE ?3 OR p.description LIKE ?3)
-        ORDER BY p.updated_at DESC
-        LIMIT ?5 OFFSET ?6
+          AND (?5 IS NULL OR p.visibility = ?5)
+        ORDER BY p.updated_at DESC, p.id DESC
+        LIMIT ?6 OFFSET ?7
         "#,
     )
     .bind(visible_floor)
     .bind(user_id)
     .bind(&search)
     .bind(is_admin)
-    .bind(q.page.limit())
-    .bind(q.page.offset())
+    .bind(q.visibility)
+    .bind(page.limit())
+    .bind(page.offset())
     .fetch_all(&state.db)
     .await?;
 
@@ -98,7 +210,7 @@ pub async fn list(
     for p in &rows {
         out.push(render(&state, p).await?);
     }
-    Ok(Json(out).into_response())
+    Ok(paginated_json(out, total))
 }
 
 #[derive(Deserialize)]
@@ -120,55 +232,32 @@ pub async fn create(
     Json(req): Json<CreateProject>,
 ) -> ApiResult<Response> {
     validate_path_segment(&req.path)?;
+    let name = validate_name(&req.name)?;
     if Visibility::from_i32(req.visibility).is_none() {
         return Err(Error::invalid("visibility must be 0, 10 or 20").into());
     }
 
     let ns = match req.namespace_id {
-        None => {
-            sqlx::query_as::<_, Namespace>(
-                "SELECT * FROM namespaces WHERE kind = 'user' AND owner_user_id = ?1",
-            )
-            .bind(user.id)
-            .fetch_optional(&state.db)
-            .await?
-            .ok_or_else(|| Error::invalid("caller has no user namespace"))?
-        }
-        Some(id) => {
-            let ns = sqlx::query_as::<_, Namespace>("SELECT * FROM namespaces WHERE id = ?1")
-                .bind(id)
-                .fetch_optional(&state.db)
-                .await?
-                .ok_or(Error::NotFound)?;
-            // Must own the user namespace, or be >= Maintainer in the group.
-            let allowed = match ns.kind.as_str() {
-                "user" => ns.owner_user_id == Some(user.id),
-                _ => {
-                    let level: Option<i32> = sqlx::query_scalar(
-                        "SELECT access_level FROM group_members WHERE namespace_id = ?1 AND user_id = ?2",
-                    )
-                    .bind(ns.id)
-                    .bind(user.id)
-                    .fetch_optional(&state.db)
-                    .await?;
-                    level.unwrap_or(0) >= AccessLevel::Maintainer as i32
-                }
-            };
-            if !allowed && !user.is_admin {
-                return Err(Error::Forbidden.into());
-            }
-            ns
-        }
+        None => sqlx::query_as::<_, Namespace>(
+            "SELECT * FROM namespaces WHERE kind = 'user' AND owner_user_id = ?1",
+        )
+        .bind(user.id)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or_else(|| Error::invalid("caller has no user namespace"))?,
+        Some(id) => writable_namespace(&state, &user, id).await?,
     };
 
-    // disk_id: allocate from a monotonic sequence shared with migrated ids.
-    let max_disk: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(disk_id), 0) FROM projects")
-        .fetch_one(&state.db)
-        .await?;
-    let disk_id = max_disk + 1;
+    let disk_id = reserve_disk_id(&state).await?;
     let disk_hash = storage::disk_hash(disk_id);
+    let repo = storage::repo_path(&state.config.storage, &disk_hash);
+    let _operation = state.begin_git_operation().await?;
+    if let Err(error) = rgit_git::repo::init_bare(&state.config.git, &repo, "main").await {
+        remove_new_repo(&repo);
+        return Err(error.into());
+    }
 
-    let project = sqlx::query_as::<_, Project>(
+    let project_result = sqlx::query_as::<_, Project>(
         r#"
         INSERT INTO projects (namespace_id, path, name, description, visibility, disk_id, disk_hash)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING *
@@ -176,7 +265,7 @@ pub async fn create(
     )
     .bind(ns.id)
     .bind(&req.path)
-    .bind(req.name.trim())
+    .bind(name)
     .bind(&req.description)
     .bind(req.visibility)
     .bind(disk_id)
@@ -188,10 +277,22 @@ pub async fn create(
             Error::conflict("project path already taken in namespace")
         }
         other => Error::Db(other),
-    })?;
-
-    let repo = repo_disk_path(&state, &project);
-    rgit_git::repo::init_bare(&state.config.git, &repo, "main").await?;
+    });
+    let project = match project_result {
+        Ok(project) => project,
+        Err(error) => {
+            remove_new_repo(&repo);
+            return Err(error.into());
+        }
+    };
+    if !repo.is_dir() {
+        remove_new_repo(&repo);
+        sqlx::query("DELETE FROM projects WHERE id = ?1")
+            .bind(project.id)
+            .execute(&state.db)
+            .await?;
+        return Err(Error::Git("repository initialization disappeared".into()).into());
+    }
 
     Ok((StatusCode::CREATED, Json(render(&state, &project).await?)).into_response())
 }
@@ -203,7 +304,13 @@ pub async fn get(
     Path(id): Path<String>,
 ) -> ApiResult<Response> {
     let project = locate(&state, &id).await?;
-    authorize_repo(&state.db, identity.user.as_ref(), &project, RepoAction::Read).await?;
+    authorize_repo(
+        &state.db,
+        identity.user.as_ref(),
+        &project,
+        RepoAction::Read,
+    )
+    .await?;
     Ok(Json(render(&state, &project).await?).into_response())
 }
 
@@ -246,7 +353,9 @@ pub async fn update(
             return Err(Error::invalid("visibility must be 0, 10 or 20").into());
         }
     }
+    let name = req.name.as_deref().map(validate_name).transpose()?;
     if let Some(branch) = &req.default_branch {
+        let _operation = state.begin_git_operation().await?;
         let repo = repo_disk_path(&state, &project);
         rgit_git::read::rev_parse(&state.config.git, &repo, &format!("refs/heads/{branch}"))
             .await
@@ -266,7 +375,7 @@ pub async fn update(
         WHERE id = ?6 RETURNING *
         "#,
     )
-    .bind(&req.name)
+    .bind(name)
     .bind(&req.description)
     .bind(req.visibility)
     .bind(&req.default_branch)
@@ -287,15 +396,49 @@ pub async fn delete(
     let project = locate(&state, &id).await?;
     require_admin_level(&state, &user, &project, AccessLevel::Owner).await?;
 
-    sqlx::query("DELETE FROM projects WHERE id = ?1")
-        .bind(project.id)
-        .execute(&state.db)
-        .await?;
     let repo = repo_disk_path(&state, &project);
-    if repo.exists() {
-        rgit_git::repo::soft_delete(&repo)?;
+    let wiki = storage::wiki_path(&state.config.storage, &project.disk_hash);
+    let design = storage::design_path(&state.config.storage, &project.disk_hash);
+    let mut tx = state.db.begin().await?;
+    let mut moved = Vec::new();
+    for path in [&repo, &wiki, &design] {
+        if path.exists() {
+            match rgit_git::repo::soft_delete(path) {
+                Ok(trash) => moved.push((path.to_path_buf(), trash)),
+                Err(error) => {
+                    restore_soft_deleted(&moved);
+                    return Err(error.into());
+                }
+            }
+        }
+    }
+
+    let delete_result = sqlx::query("DELETE FROM projects WHERE id = ?1")
+        .bind(project.id)
+        .execute(&mut *tx)
+        .await;
+    if let Err(error) = delete_result {
+        restore_soft_deleted(&moved);
+        return Err(error.into());
+    }
+    if let Err(error) = tx.commit().await {
+        restore_soft_deleted(&moved);
+        return Err(error.into());
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+fn restore_soft_deleted(moved: &[(std::path::PathBuf, std::path::PathBuf)]) {
+    for (original, trash) in moved.iter().rev() {
+        if let Err(error) = std::fs::rename(trash, original) {
+            tracing::error!(
+                %error,
+                original = %original.display(),
+                trash = %trash.display(),
+                "failed to roll back repository deletion"
+            );
+        }
+    }
 }
 
 /// POST /api/v1/projects/{id}/archive | unarchive
@@ -339,25 +482,40 @@ pub async fn fork(
     let source = locate(&state, &id).await?;
     authorize_repo(&state.db, Some(&user), &source, RepoAction::Read).await?;
 
-    let target_ns_id = match req.namespace_id {
-        Some(id) => id,
-        None => sqlx::query_scalar(
-            "SELECT id FROM namespaces WHERE kind = 'user' AND owner_user_id = ?1",
-        )
-        .bind(user.id)
-        .fetch_one(&state.db)
-        .await?,
+    let target_ns = match req.namespace_id {
+        Some(id) => writable_namespace(&state, &user, id).await?,
+        None => {
+            sqlx::query_as::<_, Namespace>(
+                "SELECT * FROM namespaces WHERE kind = 'user' AND owner_user_id = ?1",
+            )
+            .bind(user.id)
+            .fetch_one(&state.db)
+            .await?
+        }
     };
     let path = req.path.unwrap_or_else(|| source.path.clone());
     validate_path_segment(&path)?;
+    let name = req.name.unwrap_or_else(|| source.name.clone());
+    let name = validate_name(&name)?;
 
-    let max_disk: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(disk_id), 0) FROM projects")
-        .fetch_one(&state.db)
-        .await?;
-    let disk_id = max_disk + 1;
+    let disk_id = reserve_disk_id(&state).await?;
     let disk_hash = storage::disk_hash(disk_id);
+    let src_repo = repo_disk_path(&state, &source);
+    let dst_repo = storage::repo_path(&state.config.storage, &disk_hash);
+    let _operation = state.begin_git_operation().await?;
+    if let Err(error) = rgit_git::repo::fork_local(&state.config.git, &src_repo, &dst_repo).await {
+        remove_new_repo(&dst_repo);
+        return Err(error.into());
+    }
 
-    let forked = sqlx::query_as::<_, Project>(
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(error) => {
+            remove_new_repo(&dst_repo);
+            return Err(error.into());
+        }
+    };
+    let forked_result = sqlx::query_as::<_, Project>(
         r#"
         INSERT INTO projects (namespace_id, path, name, description, visibility,
                               default_branch, lfs_enabled, disk_id, disk_hash,
@@ -365,9 +523,9 @@ pub async fn fork(
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) RETURNING *
         "#,
     )
-    .bind(target_ns_id)
+    .bind(target_ns.id)
     .bind(&path)
-    .bind(req.name.unwrap_or_else(|| source.name.clone()))
+    .bind(name)
     .bind(&source.description)
     .bind(source.visibility)
     .bind(&source.default_branch)
@@ -375,21 +533,24 @@ pub async fn fork(
     .bind(disk_id)
     .bind(&disk_hash)
     .bind(source.id)
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| match e {
         sqlx::Error::Database(ref d) if d.is_unique_violation() => {
             Error::conflict("target path already taken")
         }
         other => Error::Db(other),
-    })?;
-
-    let src_repo = repo_disk_path(&state, &source);
-    let dst_repo = repo_disk_path(&state, &forked);
-    rgit_git::repo::fork_local(&state.config.git, &src_repo, &dst_repo).await?;
+    });
+    let forked = match forked_result {
+        Ok(project) => project,
+        Err(error) => {
+            remove_new_repo(&dst_repo);
+            return Err(error.into());
+        }
+    };
 
     // Share LFS objects with the fork (DESIGN.md §9).
-    sqlx::query(
+    let link_result = sqlx::query(
         r#"
         INSERT OR IGNORE INTO project_lfs_objects (project_id, lfs_object_id)
         SELECT ?1, lfs_object_id FROM project_lfs_objects WHERE project_id = ?2
@@ -397,8 +558,17 @@ pub async fn fork(
     )
     .bind(forked.id)
     .bind(source.id)
-    .execute(&state.db)
-    .await?;
+    .execute(&mut *tx)
+    .await;
+    if let Err(error) = link_result {
+        remove_new_repo(&dst_repo);
+        return Err(error.into());
+    }
+
+    if let Err(error) = tx.commit().await {
+        remove_new_repo(&dst_repo);
+        return Err(error.into());
+    }
 
     Ok((StatusCode::CREATED, Json(render(&state, &forked).await?)).into_response())
 }
@@ -417,6 +587,7 @@ pub async fn transfer(
 ) -> ApiResult<Response> {
     let project = locate(&state, &id).await?;
     require_admin_level(&state, &user, &project, AccessLevel::Owner).await?;
+    writable_namespace(&state, &user, req.namespace_id).await?;
 
     let updated = sqlx::query_as::<_, Project>(
         "UPDATE projects SET namespace_id = ?1, updated_at = datetime('now') WHERE id = ?2 RETURNING *",

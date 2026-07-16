@@ -19,6 +19,7 @@ use rgit_core::state::AppState;
 use rgit_core::Error;
 use rgit_git::protocol::{self, Service};
 use serde::Deserialize;
+use tokio::io::AsyncReadExt;
 use tokio_util::io::{ReaderStream, StreamReader};
 
 use super::helpers::{find_project, repo_disk_path};
@@ -59,6 +60,15 @@ async fn resolve_and_authorize(
     let (_, project) = find_project(state, ns, proj_path)
         .await
         .map_err(|_| (StatusCode::NOT_FOUND, "not found\n").into_response())?;
+
+    // SSH-issued LFS credentials are deliberately unusable for Git pack APIs.
+    if identity.lfs_project().is_some() {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "LFS credentials are not valid for Git\n",
+        )
+            .into_response());
+    }
 
     let (action, scope) = match service {
         Service::UploadPack | Service::UploadArchive => (RepoAction::Read, Scope::ReadRepository),
@@ -108,6 +118,10 @@ pub async fn info_refs(
         Ok(p) => p,
         Err(resp) => return resp,
     };
+    let operation = match state.begin_git_operation().await {
+        Ok(operation) => operation,
+        Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, "server busy\n").into_response(),
+    };
 
     let repo = repo_disk_path(&state, &project);
     let git_protocol = header_str(&headers, "Git-Protocol");
@@ -125,8 +139,17 @@ pub async fn info_refs(
     };
 
     let stdout = child.stdout.take().expect("stdout piped");
+    let stderr = child.stderr.take().expect("stderr piped");
+    let git_config = state.config.git.clone();
     tokio::spawn(async move {
-        let _ = child.wait().await;
+        let _operation = operation;
+        let stderr_task = tokio::spawn(read_git_stderr(stderr));
+        let status = protocol::wait_with_timeout(&git_config, &mut child).await;
+        log_git_exit(
+            "advertise-refs",
+            &status,
+            stderr_task.await.unwrap_or_default(),
+        );
     });
 
     // pkt-line service header + flush + refs advertisement.
@@ -150,20 +173,54 @@ pub async fn info_refs(
         .into_response()
 }
 
-/// POST git-upload-pack / git-receive-pack — the actual data transfer.
-pub async fn service_rpc(
+pub async fn upload_pack(
     State(state): State<AppState>,
-    Path((ns, proj, service_name)): Path<(String, String, String)>,
+    Path((ns, proj)): Path<(String, String)>,
     identity: Identity,
     headers: HeaderMap,
     request: axum::extract::Request,
 ) -> Response {
-    let Some(service) = Service::from_wire(&service_name)
-        .filter(|s| matches!(s, Service::UploadPack | Service::ReceivePack))
-    else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
+    service_rpc(
+        state,
+        ns,
+        proj,
+        Service::UploadPack,
+        identity,
+        headers,
+        request,
+    )
+    .await
+}
 
+pub async fn receive_pack(
+    State(state): State<AppState>,
+    Path((ns, proj)): Path<(String, String)>,
+    identity: Identity,
+    headers: HeaderMap,
+    request: axum::extract::Request,
+) -> Response {
+    service_rpc(
+        state,
+        ns,
+        proj,
+        Service::ReceivePack,
+        identity,
+        headers,
+        request,
+    )
+    .await
+}
+
+/// POST git-upload-pack / git-receive-pack — the actual data transfer.
+async fn service_rpc(
+    state: AppState,
+    ns: String,
+    proj: String,
+    service: Service,
+    identity: Identity,
+    headers: HeaderMap,
+    request: axum::extract::Request,
+) -> Response {
     let expected_type = format!("application/x-{}-request", service.name());
     if header_str(&headers, "content-type").as_deref() != Some(expected_type.as_str()) {
         return (StatusCode::UNSUPPORTED_MEDIA_TYPE, "bad content-type\n").into_response();
@@ -172,6 +229,10 @@ pub async fn service_rpc(
     let project = match resolve_and_authorize(&state, &identity, &ns, &proj, service).await {
         Ok(p) => p,
         Err(resp) => return resp,
+    };
+    let operation = match state.begin_git_operation().await {
+        Ok(operation) => operation,
+        Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, "server busy\n").into_response(),
     };
 
     let repo = repo_disk_path(&state, &project);
@@ -193,6 +254,7 @@ pub async fn service_rpc(
 
     let mut stdin = child.stdin.take().expect("stdin piped");
     let stdout = child.stdout.take().expect("stdout piped");
+    let stderr = child.stderr.take().expect("stderr piped");
 
     // Request body → (gunzip) → child stdin, streamed.
     let body_stream = request
@@ -202,21 +264,40 @@ pub async fn service_rpc(
     let is_receive = service == Service::ReceivePack;
     let state2 = state.clone();
     let project_id = project.id;
+    let git_config = state.config.git.clone();
     tokio::spawn(async move {
+        let _operation = operation;
+        let stderr_task = tokio::spawn(read_git_stderr(stderr));
         let mut reader = StreamReader::new(body_stream);
-        let copy_result = if gzipped {
-            let mut gunzip = async_compression::tokio::bufread::GzipDecoder::new(
-                tokio::io::BufReader::new(&mut reader),
-            );
-            tokio::io::copy(&mut gunzip, &mut stdin).await
-        } else {
-            tokio::io::copy(&mut reader, &mut stdin).await
+        let copy_result = tokio::time::timeout(
+            std::time::Duration::from_secs(git_config.timeout_secs),
+            async {
+                if gzipped {
+                    let mut gunzip = async_compression::tokio::bufread::GzipDecoder::new(
+                        tokio::io::BufReader::new(&mut reader),
+                    );
+                    tokio::io::copy(&mut gunzip, &mut stdin).await
+                } else {
+                    tokio::io::copy(&mut reader, &mut stdin).await
+                }
+            },
+        )
+        .await;
+        let copy_result = match copy_result {
+            Ok(result) => result,
+            Err(_) => {
+                let _ = child.kill().await;
+                tracing::warn!(service = service.name(), "git request body timed out");
+                return;
+            }
         };
         if let Err(e) = copy_result {
             tracing::debug!(error = %e, "git rpc body copy ended early");
         }
         drop(stdin); // EOF to git
-        let status = child.wait().await;
+        let status = protocol::wait_with_timeout(&git_config, &mut child).await;
+        let stderr = stderr_task.await.unwrap_or_default();
+        log_git_exit(service.name(), &status, stderr);
 
         // Post-receive bookkeeping (DESIGN.md §8.1 step 4).
         if is_receive && matches!(&status, Ok(s) if s.success()) {
@@ -247,14 +328,51 @@ async fn post_receive(state: &AppState, project_id: i64) -> anyhow::Result<()> {
         .await?;
     let repo = repo_disk_path(state, &project);
     let head = rgit_git::repo::head_branch(&state.config.git, &repo).await?;
-    sqlx::query("UPDATE projects SET default_branch = ?1, updated_at = datetime('now') WHERE id = ?2")
-        .bind(head)
-        .bind(project_id)
-        .execute(&state.db)
-        .await?;
+    sqlx::query(
+        "UPDATE projects SET default_branch = ?1, updated_at = datetime('now') WHERE id = ?2",
+    )
+    .bind(head)
+    .bind(project_id)
+    .execute(&state.db)
+    .await?;
     Ok(())
 }
 
 fn header_str(headers: &HeaderMap, name: &str) -> Option<String> {
-    headers.get(name).and_then(|v| v.to_str().ok()).map(str::to_string)
+    headers
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string)
+}
+
+async fn read_git_stderr(stderr: tokio::process::ChildStderr) -> Vec<u8> {
+    const LOG_LIMIT: usize = 64 * 1024;
+    let mut stderr = stderr;
+    let mut chunk = [0_u8; 8 * 1024];
+    let mut logged = Vec::new();
+    loop {
+        match stderr.read(&mut chunk).await {
+            Ok(0) | Err(_) => break,
+            Ok(read) => {
+                let keep = read.min(LOG_LIMIT.saturating_sub(logged.len()));
+                logged.extend_from_slice(&chunk[..keep]);
+            }
+        }
+    }
+    logged
+}
+
+fn log_git_exit(
+    service: &str,
+    status: &Result<std::process::ExitStatus, rgit_core::Error>,
+    stderr: Vec<u8>,
+) {
+    if !matches!(&status, Ok(code) if code.success()) {
+        tracing::warn!(
+            service,
+            status = ?status,
+            stderr = %String::from_utf8_lossy(&stderr).trim(),
+            "git service failed"
+        );
+    }
 }

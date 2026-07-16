@@ -36,7 +36,6 @@ sqlx = { version = "0.8", default-features = false, features = [
     "tls-rustls",
     "sqlite",
     "chrono",
-    "macros",
     "migrate",
 ] }
 
@@ -62,10 +61,6 @@ base64 = "0.22"
 rand = "0.8"
 subtle = "2"
 
-russh = "0.49"
-ssh-key = { version = "0.6", features = ["ed25519", "rsa", "ecdsa"] }
-
-async-trait = "0.1"
 bytes = "1"
 futures = "0.3"
 tokio-util = { version = "0.7", features = ["io"] }
@@ -74,6 +69,7 @@ flate2 = "1"
 mime_guess = "2"
 percent-encoding = "2"
 regex = "1"
+url = "2"
 
 [profile.release]
 lto = "thin"

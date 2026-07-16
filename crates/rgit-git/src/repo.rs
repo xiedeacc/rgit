@@ -7,10 +7,22 @@ use rgit_core::config::GitConfig;
 use rgit_core::{Error, Result};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
 /// Run a git command to completion, capturing stdout. Fails on non-zero exit.
 pub async fn run_git(cfg: &GitConfig, args: &[&str], cwd: Option<&Path>) -> Result<Vec<u8>> {
+    run_git_limited(cfg, args, cwd, 64 * 1024 * 1024).await
+}
+
+/// Run git while bounding captured stdout. stderr is always drained to avoid
+/// pipe deadlocks, but only its first 64 KiB is retained for diagnostics.
+pub async fn run_git_limited(
+    cfg: &GitConfig,
+    args: &[&str],
+    cwd: Option<&Path>,
+    max_stdout: usize,
+) -> Result<Vec<u8>> {
     let mut cmd = Command::new(&cfg.bin);
     cmd.args(args)
         .stdin(Stdio::null())
@@ -23,21 +35,81 @@ pub async fn run_git(cfg: &GitConfig, args: &[&str], cwd: Option<&Path>) -> Resu
         cmd.current_dir(dir);
     }
 
-    let timeout = std::time::Duration::from_secs(cfg.timeout_secs);
-    let output = tokio::time::timeout(timeout, cmd.output())
-        .await
-        .map_err(|_| Error::Git(format!("git {} timed out", args.join(" "))))?
+    let mut child = cmd
+        .spawn()
         .map_err(|e| Error::Git(format!("failed to spawn git: {e}")))?;
+    let mut stdout = child.stdout.take().expect("stdout piped");
+    let stderr = child.stderr.take().expect("stderr piped");
+    let stderr_task = tokio::spawn(drain_stderr(stderr));
 
-    if !output.status.success() {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(cfg.timeout_secs);
+    let read_stdout = async {
+        let mut output = Vec::new();
+        let mut buffer = [0_u8; 32 * 1024];
+        loop {
+            let read = stdout.read(&mut buffer).await?;
+            if read == 0 {
+                return Ok::<_, std::io::Error>(output);
+            }
+            if output.len().saturating_add(read) > max_stdout {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::FileTooLarge,
+                    "git stdout exceeded limit",
+                ));
+            }
+            output.extend_from_slice(&buffer[..read]);
+        }
+    };
+    let stdout = match tokio::time::timeout_at(deadline, read_stdout).await {
+        Ok(Ok(output)) => output,
+        Ok(Err(error)) if error.kind() == std::io::ErrorKind::FileTooLarge => {
+            let _ = child.kill().await;
+            return Err(Error::invalid(format!(
+                "git output exceeds {max_stdout} bytes"
+            )));
+        }
+        Ok(Err(error)) => {
+            let _ = child.kill().await;
+            return Err(Error::Git(format!("reading git stdout failed: {error}")));
+        }
+        Err(_) => {
+            let _ = child.kill().await;
+            return Err(Error::Git(format!("git {} timed out", args.join(" "))));
+        }
+    };
+    let status = match tokio::time::timeout_at(deadline, child.wait()).await {
+        Ok(result) => result.map_err(|e| Error::Git(format!("waiting for git failed: {e}")))?,
+        Err(_) => {
+            let _ = child.kill().await;
+            return Err(Error::Git(format!("git {} timed out", args.join(" "))));
+        }
+    };
+    let stderr = stderr_task.await.unwrap_or_default();
+
+    if !status.success() {
         return Err(Error::Git(format!(
             "git {} failed ({}): {}",
             args.join(" "),
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
+            status,
+            String::from_utf8_lossy(&stderr).trim()
         )));
     }
-    Ok(output.stdout)
+    Ok(stdout)
+}
+
+async fn drain_stderr(mut stderr: tokio::process::ChildStderr) -> Vec<u8> {
+    const LOG_LIMIT: usize = 64 * 1024;
+    let mut logged = Vec::new();
+    let mut buffer = [0_u8; 8 * 1024];
+    loop {
+        match stderr.read(&mut buffer).await {
+            Ok(0) | Err(_) => return logged,
+            Ok(read) => {
+                let keep = read.min(LOG_LIMIT.saturating_sub(logged.len()));
+                logged.extend_from_slice(&buffer[..keep]);
+            }
+        }
+    }
 }
 
 /// Create an empty bare repository with the given initial HEAD branch.
@@ -52,7 +124,8 @@ pub async fn init_bare(cfg: &GitConfig, path: &Path, default_branch: &str) -> Re
             "init",
             "--bare",
             &format!("--initial-branch={default_branch}"),
-            path.to_str().ok_or_else(|| Error::invalid("non-utf8 path"))?,
+            path.to_str()
+                .ok_or_else(|| Error::invalid("non-utf8 path"))?,
         ],
         None,
     )
@@ -75,8 +148,10 @@ pub async fn fork_local(cfg: &GitConfig, src: &Path, dst: &Path) -> Result<()> {
             "clone",
             "--bare",
             "--local",
-            src.to_str().ok_or_else(|| Error::invalid("non-utf8 path"))?,
-            dst.to_str().ok_or_else(|| Error::invalid("non-utf8 path"))?,
+            src.to_str()
+                .ok_or_else(|| Error::invalid("non-utf8 path"))?,
+            dst.to_str()
+                .ok_or_else(|| Error::invalid("non-utf8 path"))?,
         ],
         None,
     )

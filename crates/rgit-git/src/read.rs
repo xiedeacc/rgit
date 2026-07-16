@@ -7,7 +7,12 @@ use rgit_core::{Error, Result};
 use serde::Serialize;
 use std::path::Path;
 
-use crate::repo::run_git;
+use crate::repo::{run_git, run_git_limited};
+
+const TREE_OUTPUT_LIMIT: usize = 16 * 1024 * 1024;
+const LOG_OUTPUT_LIMIT: usize = 16 * 1024 * 1024;
+const COMMIT_OUTPUT_LIMIT: usize = 2 * 1024 * 1024;
+const DIFF_OUTPUT_LIMIT: usize = 32 * 1024 * 1024;
 
 /// Refuse refs/paths that could be mistaken for options.
 fn check_arg(s: &str) -> Result<&str> {
@@ -59,20 +64,32 @@ pub async fn list_tree(
     } else {
         format!("{reference}:{path}")
     };
-    let out = run_git(cfg, &["ls-tree", "-z", "--long", &treeish], Some(repo)).await?;
+    let out = run_git_limited(
+        cfg,
+        &["ls-tree", "-z", "--long", &treeish],
+        Some(repo),
+        TREE_OUTPUT_LIMIT,
+    )
+    .await?;
 
     let mut entries = Vec::new();
     for record in out.split(|b| *b == 0).filter(|r| !r.is_empty()) {
         // "<mode> <type> <sha> <size>\t<name>"
         let record = String::from_utf8_lossy(record);
-        let Some((meta, name)) = record.split_once('\t') else { continue };
+        let Some((meta, name)) = record.split_once('\t') else {
+            continue;
+        };
         let fields: Vec<&str> = meta.split_whitespace().collect();
         if fields.len() != 4 {
             continue;
         }
         entries.push(TreeEntry {
             name: name.to_string(),
-            path: if path.is_empty() { name.to_string() } else { format!("{path}/{name}") },
+            path: if path.is_empty() {
+                name.to_string()
+            } else {
+                format!("{path}/{name}")
+            },
             mode: fields[0].to_string(),
             kind: fields[1].to_string(),
             sha: fields[2].to_string(),
@@ -80,7 +97,11 @@ pub async fn list_tree(
         });
     }
     // Directories first, then files, both alphabetical (GitHub-style).
-    entries.sort_by(|a, b| (b.kind == "tree").cmp(&(a.kind == "tree")).then(a.name.cmp(&b.name)));
+    entries.sort_by(|a, b| {
+        (b.kind == "tree")
+            .cmp(&(a.kind == "tree"))
+            .then(a.name.cmp(&b.name))
+    });
     Ok(entries)
 }
 
@@ -95,14 +116,41 @@ pub async fn read_blob(
     check_arg(reference)?;
     check_arg(path)?;
     let spec = format!("{reference}:{path}");
-    let out = run_git(cfg, &["cat-file", "blob", &spec], Some(repo)).await?;
-    if limit > 0 && out.len() > limit {
+    let size = run_git_limited(cfg, &["cat-file", "-s", &spec], Some(repo), 64)
+        .await?
+        .split(|byte| byte.is_ascii_whitespace())
+        .next()
+        .and_then(|bytes| std::str::from_utf8(bytes).ok())
+        .and_then(|value| value.parse::<usize>().ok())
+        .ok_or_else(|| Error::Git("git cat-file returned an invalid size".into()))?;
+    if limit > 0 && size > limit {
         return Err(Error::invalid("blob exceeds size limit"));
     }
-    Ok(out)
+    let output_limit = if limit > 0 { limit } else { size };
+    run_git_limited(cfg, &["cat-file", "blob", &spec], Some(repo), output_limit).await
 }
 
 const LOG_FORMAT: &str = "%H%x00%an%x00%ae%x00%aI%x00%P%x00%B";
+
+pub async fn count_commits(
+    cfg: &GitConfig,
+    repo: &Path,
+    reference: &str,
+    path: Option<&str>,
+) -> Result<i64> {
+    check_arg(reference)?;
+    let mut args = vec!["rev-list", "--count", reference];
+    if let Some(path) = path {
+        check_arg(path)?;
+        args.push("--");
+        args.push(path);
+    }
+    let output = run_git_limited(cfg, &args, Some(repo), 64).await?;
+    String::from_utf8_lossy(&output)
+        .trim()
+        .parse::<i64>()
+        .map_err(|_| Error::Git("git rev-list returned an invalid count".into()))
+}
 
 /// Commit history of a ref (optionally limited to a path), newest first.
 pub async fn log(
@@ -123,7 +171,7 @@ pub async fn log(
         args.push("--");
         args.push(p);
     }
-    let out = run_git(cfg, &args, Some(repo)).await?;
+    let out = run_git_limited(cfg, &args, Some(repo), LOG_OUTPUT_LIMIT).await?;
     parse_commits(&out)
 }
 
@@ -131,17 +179,27 @@ pub async fn log(
 pub async fn commit(cfg: &GitConfig, repo: &Path, sha: &str) -> Result<CommitInfo> {
     check_arg(sha)?;
     let format = format!("--format={LOG_FORMAT}");
-    let out = run_git(cfg, &["log", "-z", &format, "--max-count=1", sha], Some(repo)).await?;
-    parse_commits(&out)?.into_iter().next().ok_or(Error::NotFound)
+    let out = run_git_limited(
+        cfg,
+        &["log", "-z", &format, "--max-count=1", sha],
+        Some(repo),
+        COMMIT_OUTPUT_LIMIT,
+    )
+    .await?;
+    parse_commits(&out)?
+        .into_iter()
+        .next()
+        .ok_or(Error::NotFound)
 }
 
 /// Unified diff of one commit against its first parent.
 pub async fn commit_diff(cfg: &GitConfig, repo: &Path, sha: &str) -> Result<Vec<u8>> {
     check_arg(sha)?;
-    run_git(
+    run_git_limited(
         cfg,
         &["diff-tree", "-p", "--root", "--no-commit-id", sha],
         Some(repo),
+        DIFF_OUTPUT_LIMIT,
     )
     .await
 }
@@ -178,7 +236,7 @@ pub async fn tags(cfg: &GitConfig, repo: &Path) -> Result<Vec<RefInfo>> {
 }
 
 async fn for_each_ref(cfg: &GitConfig, repo: &Path, prefix: &str) -> Result<Vec<RefInfo>> {
-    let out = run_git(
+    let out = run_git_limited(
         cfg,
         &[
             "for-each-ref",
@@ -186,6 +244,7 @@ async fn for_each_ref(cfg: &GitConfig, repo: &Path, prefix: &str) -> Result<Vec<
             prefix,
         ],
         Some(repo),
+        TREE_OUTPUT_LIMIT,
     )
     .await?;
     let text = String::from_utf8_lossy(&out);
@@ -205,8 +264,67 @@ async fn for_each_ref(cfg: &GitConfig, repo: &Path, prefix: &str) -> Result<Vec<
 /// Resolve any ref expression to a full sha (also validates existence).
 pub async fn rev_parse(cfg: &GitConfig, repo: &Path, reference: &str) -> Result<String> {
     check_arg(reference)?;
-    let out = run_git(cfg, &["rev-parse", "--verify", &format!("{reference}^{{commit}}")], Some(repo))
-        .await
-        .map_err(|_| Error::NotFound)?;
+    let out = run_git(
+        cfg,
+        &["rev-parse", "--verify", &format!("{reference}^{{commit}}")],
+        Some(repo),
+    )
+    .await
+    .map_err(|_| Error::NotFound)?;
     Ok(String::from_utf8_lossy(&out).trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[tokio::test]
+    async fn blob_limit_is_checked_before_content_is_returned() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let repo = std::env::temp_dir().join(format!("rgit-read-test-{nonce}"));
+        std::fs::create_dir_all(&repo).expect("create repo dir");
+        let config = GitConfig {
+            bin: "git".into(),
+            timeout_secs: 10,
+            ..GitConfig::default()
+        };
+        crate::repo::run_git(&config, &["init", "--initial-branch=main"], Some(&repo))
+            .await
+            .expect("init repository");
+        crate::repo::run_git(&config, &["config", "user.name", "Rgit Test"], Some(&repo))
+            .await
+            .expect("configure user name");
+        crate::repo::run_git(
+            &config,
+            &["config", "user.email", "rgit@example.test"],
+            Some(&repo),
+        )
+        .await
+        .expect("configure user email");
+        std::fs::write(repo.join("large.txt"), vec![b'x'; 4096]).expect("write blob");
+        crate::repo::run_git(&config, &["add", "large.txt"], Some(&repo))
+            .await
+            .expect("git add");
+        crate::repo::run_git(&config, &["commit", "-m", "large blob"], Some(&repo))
+            .await
+            .expect("git commit");
+
+        assert!(matches!(
+            read_blob(&config, &repo, "HEAD", "large.txt", 1024).await,
+            Err(Error::Invalid(_))
+        ));
+        assert_eq!(
+            read_blob(&config, &repo, "HEAD", "large.txt", 4096)
+                .await
+                .expect("read bounded blob")
+                .len(),
+            4096
+        );
+
+        std::fs::remove_dir_all(repo).expect("remove test repo");
+    }
 }

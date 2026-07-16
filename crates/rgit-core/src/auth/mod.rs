@@ -2,6 +2,8 @@
 //! personal access tokens, SSH key parsing/fingerprints, and the
 //! project-permission resolver.
 
+pub mod authorized_keys;
+pub mod lfs_token;
 pub mod password;
 pub mod session;
 pub mod sshkey;

@@ -10,6 +10,13 @@ use rgit_core::state::AppState;
 
 /// Run the HTTP server until failure or shutdown.
 pub async fn serve(state: AppState) -> anyhow::Result<()> {
+    serve_with_shutdown(state, std::future::pending()).await
+}
+
+pub async fn serve_with_shutdown<F>(state: AppState, shutdown: F) -> anyhow::Result<()>
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
     let addr = state.config.http.bind;
     let app = router::build(state);
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -18,6 +25,7 @@ pub async fn serve(state: AppState) -> anyhow::Result<()> {
         listener,
         app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
+    .with_graceful_shutdown(shutdown)
     .await?;
     Ok(())
 }

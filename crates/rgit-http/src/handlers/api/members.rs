@@ -14,16 +14,16 @@ use super::projects::locate;
 use crate::error::ApiResult;
 use crate::middleware::auth::RequireUser;
 
-async fn require_maintainer(
+async fn caller_level(
     state: &AppState,
     user: &rgit_core::models::User,
     project: &rgit_core::models::Project,
-) -> Result<(), Error> {
+) -> Result<AccessLevel, Error> {
     if user.is_admin {
-        return Ok(());
+        return Ok(AccessLevel::Owner);
     }
     match effective_access_level(&state.db, user.id, project).await? {
-        Some(level) if level >= AccessLevel::Maintainer => Ok(()),
+        Some(level) if level >= AccessLevel::Maintainer => Ok(level),
         _ => Err(Error::Forbidden),
     }
 }
@@ -80,9 +80,23 @@ pub async fn add(
     Json(req): Json<AddMember>,
 ) -> ApiResult<Response> {
     let project = locate(&state, &id).await?;
-    require_maintainer(&state, &user, &project).await?;
-    if AccessLevel::from_i32(req.access_level).is_none() {
-        return Err(Error::invalid("access_level must be 10/20/30/40/50").into());
+    let caller = caller_level(&state, &user, &project).await?;
+    let requested = AccessLevel::from_i32(req.access_level)
+        .ok_or_else(|| Error::invalid("access_level must be 10/20/30/40/50"))?;
+    let existing: Option<i32> = sqlx::query_scalar(
+        "SELECT access_level FROM project_members WHERE project_id = ?1 AND user_id = ?2",
+    )
+    .bind(project.id)
+    .bind(req.user_id)
+    .fetch_optional(&state.db)
+    .await?;
+    if !user.is_admin
+        && (requested > caller
+            || existing
+                .and_then(AccessLevel::from_i32)
+                .is_some_and(|level| level > caller))
+    {
+        return Err(Error::Forbidden.into());
     }
 
     sqlx::query(
@@ -114,7 +128,21 @@ pub async fn remove(
     let project = locate(&state, &id).await?;
     // Members may remove themselves; otherwise Maintainer required.
     if member_id != user.id {
-        require_maintainer(&state, &user, &project).await?;
+        let caller = caller_level(&state, &user, &project).await?;
+        let target: Option<i32> = sqlx::query_scalar(
+            "SELECT access_level FROM project_members WHERE project_id = ?1 AND user_id = ?2",
+        )
+        .bind(project.id)
+        .bind(member_id)
+        .fetch_optional(&state.db)
+        .await?;
+        if !user.is_admin
+            && target
+                .and_then(AccessLevel::from_i32)
+                .is_some_and(|level| level > caller)
+        {
+            return Err(Error::Forbidden.into());
+        }
     }
     let res = sqlx::query("DELETE FROM project_members WHERE project_id = ?1 AND user_id = ?2")
         .bind(project.id)

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# rgit backup — mirrors the install root to a GitHub repo (DESIGN.md §12).
-# Ported from rblog's rblog-backup.sh with one addition: a consistent SQLite
-# snapshot replaces the hot database file in the mirror.
+# Mirror bin/, conf/, and data/ like rblog. Repository and LFS storage are
+# intentionally excluded because production shares those paths with GitLab.
 set -euo pipefail
 
 BACKUP_REPO_URL="${RGIT_BACKUP_REPO_URL:-git@github.com:xiedeacc/rgit_data.git}"
@@ -13,6 +12,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 install_dir="${RGIT_BACKUP_ROOT:-$(dirname "$script_dir")}"
 work_dir="${RGIT_BACKUP_WORK_DIR:-${install_dir}/.backup-worktree}"
 db_file="${RGIT_BACKUP_DB:-${install_dir}/data/rgit.db}"
+lock_file="${RGIT_BACKUP_LOCK_FILE:-${install_dir}/data/.backup.lock}"
 
 log() {
     echo "[rgit-backup] $*"
@@ -52,27 +52,72 @@ ensure_repo() {
     git -C "$work_dir" remote add origin "$BACKUP_REPO_URL"
 }
 
-# Consistent snapshot of the live SQLite DB (WAL-safe). The mirror carries
-# data/rgit.db.bak instead of the hot db/-wal/-shm files.
+# Replace the excluded live WAL database with a consistent snapshot carrying
+# the normal restore name data/rgit.db.
 snapshot_sqlite() {
+    rm -f "$work_dir/data/rgit.db.bak"
     if [ -f "$db_file" ]; then
-        rm -f "${db_file}.bak"
-        sqlite3 "$db_file" "VACUUM INTO '${db_file}.bak'"
-        log "sqlite snapshot written: ${db_file}.bak"
+        local snapshot="$work_dir/data/rgit.db"
+        local temporary="${snapshot}.tmp"
+        rm -f "$snapshot" "$temporary"
+        sqlite3 "$db_file" "VACUUM INTO '$temporary'"
+        mv "$temporary" "$snapshot"
+        log "sqlite snapshot written: $snapshot"
     else
+        rm -f "$work_dir/data/rgit.db"
         log "no sqlite db at ${db_file} — skipping snapshot"
     fi
 }
 
 sync_source() {
+    find "$work_dir" -mindepth 1 -maxdepth 1 \
+        ! -name '.git' ! -name 'bin' ! -name 'conf' ! -name 'data' \
+        ! -name '.rgit-empty-dirs' -exec rm -rf -- {} +
+    mkdir -p "$work_dir/bin" "$work_dir/conf" "$work_dir/data"
+
+    rsync -a --delete "$install_dir/bin/" "$work_dir/bin/"
+    rsync -a --delete "$install_dir/conf/" "$work_dir/conf/"
+
+    rm -rf "$work_dir/data/repositories" "$work_dir/data/lfs-objects"
+    rm -f "$work_dir/data/.backup.lock" "$work_dir/data/rgit.db-wal" \
+        "$work_dir/data/rgit.db-shm"
     rsync -a --delete \
-        --exclude '/logs/' \
-        --exclude "/$(basename "$work_dir")/" \
-        --exclude '/.git/' \
-        --exclude '/data/rgit.db' \
-        --exclude '/data/rgit.db-wal' \
-        --exclude '/data/rgit.db-shm' \
-        "$install_dir/" "$work_dir/"
+        --exclude '/.backup.lock' \
+        --exclude '/rgit.db' \
+        --exclude '/rgit.db.bak' \
+        --exclude '/rgit.db-wal' \
+        --exclude '/rgit.db-shm' \
+        --exclude '/repositories/' \
+        --exclude '/lfs-objects/' \
+        "$install_dir/data/" "$work_dir/data/"
+}
+
+verify_mirror() {
+    local snapshot="$work_dir/data/rgit.db"
+    if [ -f "$snapshot" ]; then
+        local integrity
+        integrity="$(sqlite3 "$snapshot" 'PRAGMA integrity_check')"
+        if [ "$integrity" != "ok" ]; then
+            log "sqlite snapshot integrity check failed: $integrity"
+            return 1
+        fi
+
+        sqlite3 "$snapshot" 'SELECT 1 FROM projects LIMIT 1' >/dev/null
+    fi
+}
+
+create_consistent_mirror() {
+    sync_source
+    snapshot_sqlite
+    verify_mirror
+}
+
+record_empty_dirs() {
+    local manifest="$work_dir/.rgit-empty-dirs"
+    find "$work_dir" -type d -empty \
+        -not -path "$work_dir/.git" \
+        -not -path "$work_dir/.git/*" \
+        -printf '%P\n' | LC_ALL=C sort >"$manifest"
 }
 
 split_file() {
@@ -95,9 +140,10 @@ PYEOF
 
 ignore_path() {
     local rel="$1"
-    touch "$work_dir/.gitignore"
-    if ! grep -qxF "$rel" "$work_dir/.gitignore"; then
-        echo "$rel" >>"$work_dir/.gitignore"
+    local exclude="$work_dir/.git/info/exclude"
+    touch "$exclude"
+    if ! grep -qxF "/$rel" "$exclude"; then
+        echo "/$rel" >>"$exclude"
     fi
 }
 
@@ -120,10 +166,16 @@ split_large_files() {
         esac
         log "splitting large file: $rel"
         ignore_path "$rel"
+        size="$(stat -c '%s' "$file")"
+        digest="$(sha256sum "$file" | cut -d' ' -f1)"
+        chunks="$(( (size + SPLIT_BYTES - 1) / SPLIT_BYTES ))"
         split_file "$file"
         {
             echo "original=$rel"
             echo "split_bytes=$SPLIT_BYTES"
+            echo "size=$size"
+            echo "sha256=$digest"
+            echo "chunks=$chunks"
         } >"${file}.rgit-split"
         rm -f "$file"
     done
@@ -135,7 +187,7 @@ commit_and_push_if_changed() {
         log "no changes to back up"
         # Re-push in case a previous push failed after commit.
         if git -C "$work_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
-            git -C "$work_dir" push origin "$BACKUP_BRANCH" || true
+            git -C "$work_dir" push origin "$BACKUP_BRANCH"
         fi
         return
     fi
@@ -154,17 +206,27 @@ main() {
     require_command python3
     require_command sqlite3
     require_command find
+    require_command stat
+    require_command sha256sum
+    require_command flock
 
     if [ ! -d "$install_dir" ]; then
         log "install dir not found: $install_dir"
         exit 1
     fi
 
-    log "backing up $install_dir -> $BACKUP_REPO_URL ($BACKUP_BRANCH)"
+    mkdir -p "$(dirname "$lock_file")"
+    exec 9>"$lock_file"
+    if ! flock -n 9; then
+        log "another backup is already running"
+        exit 75
+    fi
+
+    log "backing up $install_dir/{bin,conf,data} -> $BACKUP_REPO_URL ($BACKUP_BRANCH)"
     ensure_repo
     reset_generated_split_files
-    snapshot_sqlite
-    sync_source
+    create_consistent_mirror
+    record_empty_dirs
     split_large_files
     commit_and_push_if_changed
     log "done"

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../api/models.dart' as models;
+import '../state/session.dart';
 
 enum ProjectTab { code, commits, branches, tags, settings }
 
@@ -23,10 +25,14 @@ class ProjectHeader extends StatelessWidget {
     final full = project.fullPath;
     final ns = project.namespacePath;
     final defaultRef = project.defaultBranch ?? 'main';
+    final signedIn = context.watch<SessionState>().isSignedIn;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 0,
+          runSpacing: 6,
           children: [
             Icon(
               project.visibility == models.Visibility.public
@@ -65,7 +71,15 @@ class ProjectHeader extends StatelessWidget {
                 style: theme.textTheme.bodyMedium),
           ),
         const SizedBox(height: 12),
-        _TabBarRow(full: full, defaultRef: defaultRef, selected: selected),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: _TabBarRow(
+            full: full,
+            defaultRef: defaultRef,
+            selected: selected,
+            showSettings: signedIn,
+          ),
+        ),
         const Divider(height: 1),
         const SizedBox(height: 16),
       ],
@@ -78,11 +92,13 @@ class _TabBarRow extends StatelessWidget {
     required this.full,
     required this.defaultRef,
     required this.selected,
+    required this.showSettings,
   });
 
   final String full;
   final String defaultRef;
   final ProjectTab selected;
+  final bool showSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -96,12 +112,13 @@ class _TabBarRow extends StatelessWidget {
       ),
       (ProjectTab.branches, 'Branches', Icons.call_split, '/$full/branches'),
       (ProjectTab.tags, 'Tags', Icons.sell_outlined, '/$full/tags'),
-      (
-        ProjectTab.settings,
-        'Settings',
-        Icons.settings_outlined,
-        '/$full/settings'
-      ),
+      if (showSettings)
+        (
+          ProjectTab.settings,
+          'Settings',
+          Icons.settings_outlined,
+          '/$full/settings'
+        ),
     ];
     final theme = Theme.of(context);
     return Row(

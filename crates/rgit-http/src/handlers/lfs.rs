@@ -20,6 +20,7 @@ use rgit_core::storage;
 use rgit_core::Error;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
 
@@ -27,6 +28,7 @@ use super::helpers::find_project;
 use crate::middleware::auth::Identity;
 
 pub const LFS_CONTENT_TYPE: &str = "application/vnd.git-lfs+json";
+static UPLOAD_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Deserialize)]
 pub struct BatchRequest {
@@ -86,6 +88,15 @@ async fn resolve_lfs(
         .map_err(|_| lfs_error(StatusCode::NOT_FOUND, "not found"))?;
     if !project.lfs_enabled {
         return Err(lfs_error(StatusCode::NOT_FOUND, "LFS disabled for project"));
+    }
+
+    if let Some((project_id, can_write)) = identity.lfs_project() {
+        if project_id != project.id || (action == RepoAction::Write && !can_write) {
+            return Err(lfs_error(
+                StatusCode::FORBIDDEN,
+                "LFS token scope insufficient",
+            ));
+        }
     }
 
     let scope = match action {
@@ -171,7 +182,10 @@ pub async fn batch(
 
     (
         [(header::CONTENT_TYPE, LFS_CONTENT_TYPE)],
-        Json(BatchResponse { transfer: "basic", objects }),
+        Json(BatchResponse {
+            transfer: "basic",
+            objects,
+        }),
     )
         .into_response()
 }
@@ -240,12 +254,22 @@ async fn batch_upload_object(
         });
     }
 
-    let existing: Option<i64> = sqlx::query_scalar("SELECT id FROM lfs_objects WHERE oid = ?1")
-        .bind(&spec.oid)
-        .fetch_optional(&state.db)
-        .await?;
+    let existing: Option<(i64, i64)> =
+        sqlx::query_as("SELECT id, size FROM lfs_objects WHERE oid = ?1")
+            .bind(&spec.oid)
+            .fetch_optional(&state.db)
+            .await?;
 
-    if let Some(lfs_id) = existing {
+    if let Some((lfs_id, stored_size)) = existing {
+        if stored_size != spec.size {
+            return Ok(BatchObject {
+                oid: spec.oid.clone(),
+                size: spec.size,
+                authenticated: None,
+                actions: None,
+                error: Some(serde_json::json!({"code": 422, "message": "size mismatch"})),
+            });
+        }
         // Global dedup: object already stored — just link it to the project.
         sqlx::query(
             "INSERT OR IGNORE INTO project_lfs_objects (project_id, lfs_object_id) VALUES (?1, ?2)",
@@ -313,13 +337,18 @@ pub async fn download(
             return lfs_error(StatusCode::NOT_FOUND, "object missing");
         }
     };
+    let operation = state.begin_operation();
+    let stream = ReaderStream::new(file).map(move |item| {
+        let _keep_alive = &operation;
+        item
+    });
 
     (
         [
             (header::CONTENT_TYPE, "application/octet-stream".to_string()),
             (header::CONTENT_LENGTH, size.to_string()),
         ],
-        Body::from_stream(ReaderStream::new(file)),
+        Body::from_stream(stream),
     )
         .into_response()
 }
@@ -339,12 +368,15 @@ pub async fn upload(
         return lfs_error(StatusCode::UNPROCESSABLE_ENTITY, "invalid oid");
     }
 
+    let _operation = state.begin_operation();
     match store_streaming(&state, project.id, &oid, request).await {
         Ok(()) => StatusCode::OK.into_response(),
         Err(StoreError::DigestMismatch) => {
             lfs_error(StatusCode::UNPROCESSABLE_ENTITY, "oid/size mismatch")
         }
-        Err(StoreError::TooLarge) => lfs_error(StatusCode::UNPROCESSABLE_ENTITY, "object too large"),
+        Err(StoreError::TooLarge) => {
+            lfs_error(StatusCode::UNPROCESSABLE_ENTITY, "object too large")
+        }
         Err(StoreError::Other(e)) => {
             tracing::error!(error = %e, oid, "lfs upload failed");
             lfs_error(StatusCode::INTERNAL_SERVER_ERROR, "storage failure")
@@ -374,7 +406,8 @@ async fn store_streaming(
     let final_path = storage::lfs_path(&state.config.storage, oid);
     let tmp_dir = state.config.storage.lfs_objects.join("tmp");
     tokio::fs::create_dir_all(&tmp_dir).await?;
-    let tmp_path = tmp_dir.join(format!("{oid}.{}.part", std::process::id()));
+    let sequence = UPLOAD_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let tmp_path = tmp_dir.join(format!("{oid}.{}.{sequence}.part", std::process::id()));
 
     let mut file = tokio::fs::File::create(&tmp_path).await?;
     let mut hasher = Sha256::new();

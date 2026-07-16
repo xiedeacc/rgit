@@ -87,13 +87,12 @@ pub async fn revoke(
     RequireUser(user, _): RequireUser,
     Path(id): Path<i64>,
 ) -> ApiResult<StatusCode> {
-    let res = sqlx::query(
-        "UPDATE personal_access_tokens SET revoked = 1 WHERE id = ?1 AND user_id = ?2",
-    )
-    .bind(id)
-    .bind(user.id)
-    .execute(&state.db)
-    .await?;
+    let res =
+        sqlx::query("UPDATE personal_access_tokens SET revoked = 1 WHERE id = ?1 AND user_id = ?2")
+            .bind(id)
+            .bind(user.id)
+            .execute(&state.db)
+            .await?;
     if res.rows_affected() == 0 {
         return Err(Error::NotFound.into());
     }

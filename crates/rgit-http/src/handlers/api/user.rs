@@ -65,11 +65,15 @@ pub async fn change_password(
     RequireUser(user, _): RequireUser,
     Json(req): Json<ChangePassword>,
 ) -> ApiResult<StatusCode> {
-    if !password::verify_password(&req.current_password, &user.password_hash) {
+    if !password::verify_password_async(req.current_password.clone(), user.password_hash.clone())
+        .await
+    {
         return Err(Error::invalid("current password is incorrect").into());
     }
     password::check_password_policy(&req.new_password, state.config.auth.min_password_length)?;
-    let hash = password::hash_password(&req.new_password, state.config.auth.bcrypt_cost)?;
+    let hash =
+        password::hash_password_async(req.new_password.clone(), state.config.auth.bcrypt_cost)
+            .await?;
 
     let mut tx = state.db.begin().await?;
     sqlx::query("UPDATE users SET password_hash = ?1, updated_at = datetime('now') WHERE id = ?2")

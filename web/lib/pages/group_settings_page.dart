@@ -8,7 +8,7 @@ import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
 import '../widgets/top_nav.dart';
 
-/// Group settings: rename, members, delete (route: /:ns/settings).
+/// Group settings: general details, members, delete (route: /:ns/settings).
 class GroupSettingsPage extends StatefulWidget {
   const GroupSettingsPage({super.key, required this.ns});
 
@@ -46,12 +46,11 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
     final api = context.read<ApiClient>();
     try {
       final group = await api.getGroup(widget.ns);
+      final members = await api.listGroupMembers(group.id);
       if (!mounted) return;
       setState(() {
         _group = group;
-        // Backend has no group-member listing endpoint yet (DESIGN.md §10);
-        // membership changes still work via add/remove below.
-        _members = const <models.Member>[];
+        _members = members;
         _name.text = group.name;
       });
     } catch (e) {
@@ -67,8 +66,16 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
   }
 
   Future<void> _rename() async {
-    // Backend has no PATCH /groups/{id} yet.
-    _snack('Renaming groups is not implemented yet.');
+    try {
+      final updated = await context
+          .read<ApiClient>()
+          .updateGroup(_group!.id, {'name': _name.text});
+      if (!mounted) return;
+      setState(() => _group = updated);
+      _snack('Group settings saved.');
+    } catch (e) {
+      if (mounted) _snack('$e');
+    }
   }
 
   Future<void> _addMember() async {

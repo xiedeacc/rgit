@@ -9,29 +9,36 @@ bind = "127.0.0.1:8000"
 external_url = "https://git.example.com"
 # JSON 请求体上限（字节）；git push / LFS 上传不受此限制（流式落盘）
 max_json_body = 1048576
+# 仅在 rgit 绑定 loopback 且由本机 nginx 反代时开启
+trust_forwarded_headers = true
 
 [ssh]
 enabled = true
-bind = "0.0.0.0:2222"
-# SSH host key 目录，首次启动自动生成 ed25519
-host_key_dir = "/opt/usr/local/rgit/data/ssh"
 # 页面上展示的 ssh clone 地址：ssh://git@{clone_host}:{clone_port}/ns/proj.git
 clone_host = "git.example.com"
-clone_port = 2222
+clone_port = 10022
+# 由 SQLite 原子重建，system sshd 的 git 用户必须读取这个文件
+authorized_keys_file = "/opt/usr/local/rgit/data/ssh/authorized_keys"
+shell_path = "/opt/usr/local/rgit/bin/rgit-shell"
+shell_config = "/opt/usr/local/rgit/conf/rgit.toml"
 
 [db]
 path = "/opt/usr/local/rgit/data/rgit.db"
 
 [storage]
-# 与 GitLab hashed storage 逐字节兼容：@hashed/aa/bb/<sha256>.git
-repositories = "/opt/usr/local/rgit/data/repositories"
-# 与 GitLab LFS 布局兼容：aa/bb/<oid[4:]>
-lfs_objects = "/opt/usr/local/rgit/data/lfs-objects"
+# 与 NAS 上 GitLab 共用同一份 hashed storage，不复制到 rgit data/
+repositories = "/zfs/gitlab_data/repositories"
+# 与 NAS 上 GitLab 共用同一份 LFS 对象
+lfs_objects = "/zfs/gitlab_data/lfs-objects"
 
 [git]
 bin = "git"
 # 单个 git 子进程的硬超时（秒）
 timeout_secs = 3600
+# 所有 HTTP/SSH/浏览/archive Git 子进程的全局并发上限
+max_concurrent_operations = 16
+# 并发已满时等待槽位的最长时间（秒）
+queue_timeout_secs = 30
 
 [web]
 # Flutter build web 产物目录
@@ -42,8 +49,6 @@ static_dir = "/opt/usr/local/rgit/bin/web"
 session_ttl_hours = 336
 # 新密码 bcrypt cost（GitLab 迁移来的 cost 13 哈希验证不受影响）
 bcrypt_cost = 12
-# 小团队默认关闭自助注册，由管理员建号
-signup_enabled = false
 min_password_length = 10
 # 登录连续失败 N 次后临时锁定
 max_login_failures = 10

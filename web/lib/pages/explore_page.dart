@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart' as models;
+import '../state/session.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
 import '../widgets/project_card.dart';
@@ -20,8 +22,9 @@ class ExplorePage extends StatefulWidget {
 }
 
 class _ExplorePageState extends State<ExplorePage> {
-  late final TextEditingController _search =
-      TextEditingController(text: widget.initialQuery ?? '');
+  late final TextEditingController _search = TextEditingController(
+    text: widget.initialQuery ?? '',
+  );
   models.Paged<models.Project>? _result;
   Object? _error;
   bool _loading = true;
@@ -57,7 +60,10 @@ class _ExplorePageState extends State<ExplorePage> {
     });
     try {
       final result = await context.read<ApiClient>().listProjects(
-          search: _search.text, page: _page, perPage: _perPage);
+        search: _search.text,
+        page: _page,
+        perPage: _perPage,
+      );
       if (mounted) setState(() => _result = result);
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -68,21 +74,62 @@ class _ExplorePageState extends State<ExplorePage> {
 
   @override
   Widget build(BuildContext context) {
+    final signedIn = context.watch<SessionState>().isSignedIn;
     return PageShell(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Text('Explore projects',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
-              const Spacer(),
-              FilledButton.icon(
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('New project'),
-                onPressed: () => showNewProjectDialog(context),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final actions = Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.group_add_outlined, size: 18),
+                    label: const Text('New group'),
+                    onPressed: () => context.go('/groups/new'),
+                  ),
+                  FilledButton.icon(
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('New project'),
+                    onPressed: () => showNewProjectDialog(context),
+                  ),
+                ],
+              );
+              if (!signedIn) {
+                return const Text(
+                  'Explore projects',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+                );
+              }
+              if (constraints.maxWidth < 820) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Explore projects',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    actions,
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  const Text(
+                    'Explore projects',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+                  ),
+                  const Spacer(),
+                  actions,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 16),
           TextField(

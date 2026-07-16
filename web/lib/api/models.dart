@@ -26,10 +26,10 @@ class Visibility {
   static const int public = 20;
 
   static String label(int v) => switch (v) {
-        public => 'Public',
-        internal => 'Internal',
-        _ => 'Private',
-      };
+    public => 'Public',
+    internal => 'Internal',
+    _ => 'Private',
+  };
 }
 
 /// Access levels (GitLab-compatible).
@@ -75,15 +75,15 @@ class User {
   bool get isActive => state == 'active';
 
   factory User.fromJson(Map<String, dynamic> json) => User(
-        id: _asInt(json['id']),
-        username: _asString(json['username']),
-        email: _asString(json['email']),
-        name: _asString(json['name']),
-        isAdmin: _asBool(json['is_admin']),
-        state: _asString(json['state'], 'active'),
-        createdAt: json['created_at'] as String?,
-        updatedAt: json['updated_at'] as String?,
-      );
+    id: _asInt(json['id']),
+    username: _asString(json['username']),
+    email: _asString(json['email']),
+    name: _asString(json['name']),
+    isAdmin: _asBool(json['is_admin']),
+    state: _asString(json['state'], 'active'),
+    createdAt: json['created_at'] as String?,
+    updatedAt: json['updated_at'] as String?,
+  );
 }
 
 /// Namespace row: {id, path, name, kind, owner_user_id, description, ...}.
@@ -111,14 +111,14 @@ class Namespace {
   bool get isGroup => kind == 'group';
 
   factory Namespace.fromJson(Map<String, dynamic> json) => Namespace(
-        id: _asInt(json['id']),
-        name: _asString(json['name']),
-        path: _asString(json['path']),
-        kind: _asString(json['kind'], 'user'),
-        ownerUserId: _asIntOrNull(json['owner_user_id']),
-        description: _asString(json['description']),
-        createdAt: json['created_at'] as String?,
-      );
+    id: _asInt(json['id']),
+    name: _asString(json['name']),
+    path: _asString(json['path']),
+    kind: _asString(json['kind'], 'user'),
+    ownerUserId: _asIntOrNull(json['owner_user_id']),
+    description: _asString(json['description']),
+    createdAt: json['created_at'] as String?,
+  );
 }
 
 /// Project row; rendered project JSON additionally carries full_path,
@@ -172,7 +172,8 @@ class Project {
   factory Project.fromJson(Map<String, dynamic> json) {
     final path = _asString(json['path']);
     final nsPath = json['namespace_path'] as String?;
-    final full = json['full_path'] as String? ??
+    final full =
+        json['full_path'] as String? ??
         (nsPath != null ? '$nsPath/$path' : path);
     return Project(
       id: _asInt(json['id']),
@@ -214,12 +215,12 @@ class Member {
   final String? createdAt;
 
   factory Member.fromJson(Map<String, dynamic> json) => Member(
-        userId: _asInt(json['user_id'], _asInt(json['id'])),
-        accessLevel: _asInt(json['access_level']),
-        username: json['username'] as String?,
-        name: json['name'] as String?,
-        createdAt: json['created_at'] as String?,
-      );
+    userId: _asInt(json['user_id'], _asInt(json['id'])),
+    accessLevel: _asInt(json['access_level']),
+    username: json['username'] as String?,
+    name: json['name'] as String?,
+    createdAt: json['created_at'] as String?,
+  );
 }
 
 /// Tree entry: {name, path, kind ("blob"|"tree"|"commit"), mode, sha, size?}.
@@ -246,13 +247,13 @@ class TreeEntry {
   bool get isSubmodule => kind == 'commit';
 
   factory TreeEntry.fromJson(Map<String, dynamic> json) => TreeEntry(
-        name: _asString(json['name']),
-        path: _asString(json['path'], _asString(json['name'])),
-        kind: _asString(json['kind'], _asString(json['type'], 'blob')),
-        sha: json['sha'] as String?,
-        mode: json['mode'] as String?,
-        size: _asIntOrNull(json['size']),
-      );
+    name: _asString(json['name']),
+    path: _asString(json['path'], _asString(json['name'])),
+    kind: _asString(json['kind'], _asString(json['type'], 'blob')),
+    sha: json['sha'] as String?,
+    mode: json['mode'] as String?,
+    size: _asIntOrNull(json['size']),
+  );
 }
 
 /// Commit: {sha, author_name, author_email, authored_at, message, parents}.
@@ -277,14 +278,15 @@ class CommitInfo {
   String get title => message.split('\n').first;
 
   factory CommitInfo.fromJson(Map<String, dynamic> json) => CommitInfo(
-        sha: _asString(json['sha']),
-        message: _asString(json['message']),
-        authorName: _asString(json['author_name']),
-        authorEmail: _asString(json['author_email']),
-        authoredAt: json['authored_at'] as String?,
-        parents: (json['parents'] as List?)?.map((e) => '$e').toList() ??
-            const <String>[],
-      );
+    sha: _asString(json['sha']),
+    message: _asString(json['message']),
+    authorName: _asString(json['author_name']),
+    authorEmail: _asString(json['author_email']),
+    authoredAt: json['authored_at'] as String?,
+    parents:
+        (json['parents'] as List?)?.map((e) => '$e').toList() ??
+        const <String>[],
+  );
 }
 
 /// Branch ref: {name, sha, target_sha?}.
@@ -294,10 +296,8 @@ class Branch {
   final String name;
   final String? sha;
 
-  factory Branch.fromJson(Map<String, dynamic> json) => Branch(
-        name: _asString(json['name']),
-        sha: json['sha'] as String?,
-      );
+  factory Branch.fromJson(Map<String, dynamic> json) =>
+      Branch(name: _asString(json['name']), sha: json['sha'] as String?);
 }
 
 /// Tag ref: {name, sha, target_sha?} (target_sha = peeled commit for
@@ -313,10 +313,10 @@ class Tag {
   String? get commitSha => targetSha ?? sha;
 
   factory Tag.fromJson(Map<String, dynamic> json) => Tag(
-        name: _asString(json['name']),
-        sha: json['sha'] as String?,
-        targetSha: json['target_sha'] as String?,
-      );
+    name: _asString(json['name']),
+    sha: json['sha'] as String?,
+    targetSha: json['target_sha'] as String?,
+  );
 }
 
 class SshKey {
@@ -337,13 +337,13 @@ class SshKey {
   final String? lastUsedAt;
 
   factory SshKey.fromJson(Map<String, dynamic> json) => SshKey(
-        id: _asInt(json['id']),
-        title: _asString(json['title']),
-        fingerprintSha256: _asString(json['fingerprint_sha256']),
-        key: json['key'] as String?,
-        createdAt: json['created_at'] as String?,
-        lastUsedAt: json['last_used_at'] as String?,
-      );
+    id: _asInt(json['id']),
+    title: _asString(json['title']),
+    fingerprintSha256: _asString(json['fingerprint_sha256']),
+    key: json['key'] as String?,
+    createdAt: json['created_at'] as String?,
+    lastUsedAt: json['last_used_at'] as String?,
+  );
 }
 
 class PersonalAccessToken {
@@ -417,13 +417,13 @@ class AdminStats {
   final String version;
 
   factory AdminStats.fromJson(Map<String, dynamic> json) => AdminStats(
-        users: _asInt(json['users']),
-        projects: _asInt(json['projects']),
-        groups: _asInt(json['groups']),
-        lfsObjects: _asInt(json['lfs_objects']),
-        lfsBytes: _asInt(json['lfs_bytes']),
-        version: _asString(json['version']),
-      );
+    users: _asInt(json['users']),
+    projects: _asInt(json['projects']),
+    groups: _asInt(json['groups']),
+    lfsObjects: _asInt(json['lfs_objects']),
+    lfsBytes: _asInt(json['lfs_bytes']),
+    version: _asString(json['version']),
+  );
 }
 
 /// GET .../repository/blob:
@@ -448,21 +448,21 @@ class BlobFile {
   final String? text;
 
   BlobFile withText(String decoded) => BlobFile(
-        path: path,
-        ref: ref,
-        size: size,
-        binary: binary,
-        contentBase64: contentBase64,
-        text: decoded,
-      );
+    path: path,
+    ref: ref,
+    size: size,
+    binary: binary,
+    contentBase64: contentBase64,
+    text: decoded,
+  );
 
   factory BlobFile.fromJson(Map<String, dynamic> json) => BlobFile(
-        path: _asString(json['path']),
-        ref: _asString(json['ref']),
-        size: _asInt(json['size']),
-        binary: _asBool(json['binary']),
-        contentBase64: _asString(json['content_base64']),
-      );
+    path: _asString(json['path']),
+    ref: _asString(json['ref']),
+    size: _asInt(json['size']),
+    binary: _asBool(json['binary']),
+    contentBase64: _asString(json['content_base64']),
+  );
 }
 
 /// GET .../repository/readme: {path, content} (raw markdown).
@@ -473,13 +473,12 @@ class ReadmeFile {
   final String content;
 
   factory ReadmeFile.fromJson(Map<String, dynamic> json) => ReadmeFile(
-        path: _asString(json['path'], 'README.md'),
-        content: _asString(json['content']),
-      );
+    path: _asString(json['path'], 'README.md'),
+    content: _asString(json['content']),
+  );
 }
 
-/// One page of results. `total` comes from the X-Total header when present,
-/// otherwise a lower-bound estimate.
+/// One page of results. `total` comes from the required X-Total header.
 class Paged<T> {
   const Paged({required this.items, required this.total, required this.page});
 

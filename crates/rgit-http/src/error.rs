@@ -30,6 +30,7 @@ impl IntoResponse for ApiError {
             Error::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
             Error::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
             Error::Invalid(_) => (StatusCode::BAD_REQUEST, "invalid"),
+            Error::Busy => (StatusCode::SERVICE_UNAVAILABLE, "busy"),
             Error::Db(_) | Error::Io(_) | Error::Git(_) | Error::Internal(_) => {
                 tracing::error!(error = %self.0, "internal error");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal")
@@ -47,16 +48,4 @@ impl IntoResponse for ApiError {
         )
             .into_response()
     }
-}
-
-/// Placeholder for endpoints scaffolded but not yet implemented (M2+).
-pub fn not_implemented() -> Response {
-    (
-        StatusCode::NOT_IMPLEMENTED,
-        Json(serde_json::json!({
-            "error": "not_implemented",
-            "message": "endpoint scaffolded, implementation pending"
-        })),
-    )
-        .into_response()
 }

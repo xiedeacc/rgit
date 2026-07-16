@@ -1,12 +1,12 @@
 {
-    "name": "rgit_web",
-    "short_name": "rgit_web",
-    "start_url": ".",
+    "name": "rgit",
+    "short_name": "rgit",
+    "start_url": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#f6f8fa",
+    "theme_color": "#f6f8fa",
+    "description": "rgit lightweight self-hosted Git service",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

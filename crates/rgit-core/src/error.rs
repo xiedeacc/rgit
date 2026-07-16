@@ -20,6 +20,9 @@ pub enum Error {
     #[error("invalid input: {0}")]
     Invalid(String),
 
+    #[error("service busy")]
+    Busy,
+
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
 

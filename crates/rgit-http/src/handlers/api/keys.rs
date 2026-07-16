@@ -17,12 +17,10 @@ pub async fn list(
     State(state): State<AppState>,
     RequireUser(user, _): RequireUser,
 ) -> ApiResult<Json<Vec<SshKey>>> {
-    let keys = sqlx::query_as::<_, SshKey>(
-        "SELECT * FROM ssh_keys WHERE user_id = ?1 ORDER BY id",
-    )
-    .bind(user.id)
-    .fetch_all(&state.db)
-    .await?;
+    let keys = sqlx::query_as::<_, SshKey>("SELECT * FROM ssh_keys WHERE user_id = ?1 ORDER BY id")
+        .bind(user.id)
+        .fetch_all(&state.db)
+        .await?;
     Ok(Json(keys))
 }
 
@@ -48,7 +46,11 @@ pub async fn create(
         return Err(Error::conflict("key already registered").into());
     }
 
-    let title = if req.title.trim().is_empty() { parsed.comment.clone() } else { req.title };
+    let title = if req.title.trim().is_empty() {
+        parsed.comment.clone()
+    } else {
+        req.title
+    };
     let key = sqlx::query_as::<_, SshKey>(
         r#"
         INSERT INTO ssh_keys (user_id, title, key, fingerprint_sha256)
@@ -61,6 +63,8 @@ pub async fn create(
     .bind(&parsed.fingerprint_sha256)
     .fetch_one(&state.db)
     .await?;
+
+    rgit_core::auth::authorized_keys::sync_if_enabled(&state.db, &state.config.ssh).await?;
 
     Ok((StatusCode::CREATED, Json(key)).into_response())
 }
@@ -78,5 +82,6 @@ pub async fn delete(
     if res.rows_affected() == 0 {
         return Err(Error::NotFound.into());
     }
+    rgit_core::auth::authorized_keys::sync_if_enabled(&state.db, &state.config.ssh).await?;
     Ok(StatusCode::NO_CONTENT)
 }

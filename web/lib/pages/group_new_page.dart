@@ -16,6 +16,7 @@ class GroupNewPage extends StatefulWidget {
 class _GroupNewPageState extends State<GroupNewPage> {
   final _name = TextEditingController();
   final _path = TextEditingController();
+  final _description = TextEditingController();
   String? _error;
   bool _busy = false;
 
@@ -23,19 +24,29 @@ class _GroupNewPageState extends State<GroupNewPage> {
   void dispose() {
     _name.dispose();
     _path.dispose();
+    _description.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    final name = _name.text.trim();
+    final path = _path.text.trim();
+    if (name.isEmpty || path.isEmpty) {
+      setState(() => _error = 'Group name and path are required.');
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
       final group = await context.read<ApiClient>().createGroup(
-            name: _name.text,
-            path: _path.text.isNotEmpty ? _path.text : _name.text,
-          );
+        name: name,
+        path: path,
+        description: _description.text.trim().isEmpty
+            ? null
+            : _description.text.trim(),
+      );
       if (mounted) context.go('/${group.path}');
     } catch (e) {
       setState(() => _error = '$e');
@@ -51,8 +62,10 @@ class _GroupNewPageState extends State<GroupNewPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('New group',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
+          const Text(
+            'New group',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 6),
           Text(
             'Groups are shared namespaces: projects under a group are '
@@ -61,9 +74,10 @@ class _GroupNewPageState extends State<GroupNewPage> {
           ),
           const SizedBox(height: 16),
           if (_error != null) ...[
-            Text(_error!,
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.error)),
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
             const SizedBox(height: 10),
           ],
           TextField(
@@ -75,8 +89,17 @@ class _GroupNewPageState extends State<GroupNewPage> {
           TextField(
             controller: _path,
             decoration: const InputDecoration(
-              labelText: 'Group path (URL, defaults to name)',
+              labelText: 'Group path',
+              helperText:
+                  'URL-safe: letters, numbers, period, dash, underscore',
             ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _description,
+            decoration: const InputDecoration(labelText: 'Description'),
+            minLines: 2,
+            maxLines: 4,
           ),
           const SizedBox(height: 16),
           Align(

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../state/session.dart';
+import '../pages/project_new_dialog.dart';
 
 /// GitHub-style top navigation bar: logo, search, avatar menu.
 class TopNav extends StatelessWidget implements PreferredSizeWidget {
@@ -15,6 +16,7 @@ class TopNav extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final session = context.watch<SessionState>();
     final user = session.user;
+    final compact = MediaQuery.sizeOf(context).width < 700;
     return AppBar(
       titleSpacing: 16,
       title: Row(
@@ -23,29 +25,35 @@ class TopNav extends StatelessWidget implements PreferredSizeWidget {
             onTap: () => context.go('/'),
             child: Row(
               children: const [
-                Icon(Icons.merge_type, size: 26),
-                SizedBox(width: 6),
+                Text('</>',
+                    style: TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700)),
+                SizedBox(width: 7),
                 Text('rgit',
                     style:
                         TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
               ],
             ),
           ),
-          const SizedBox(width: 16),
-          SizedBox(
-            width: 280,
-            height: 34,
-            child: TextField(
-              decoration: const InputDecoration(
-                hintText: 'Search projects',
-                prefixIcon: Icon(Icons.search, size: 18),
-                contentPadding: EdgeInsets.symmetric(vertical: 4),
+          if (!compact) ...[
+            const SizedBox(width: 16),
+            SizedBox(
+              width: 280,
+              height: 34,
+              child: TextField(
+                decoration: const InputDecoration(
+                  hintText: 'Search projects',
+                  prefixIcon: Icon(Icons.search, size: 18),
+                  contentPadding: EdgeInsets.symmetric(vertical: 4),
+                ),
+                style: const TextStyle(fontSize: 14),
+                onSubmitted: (q) => context
+                    .go(Uri(path: '/', queryParameters: {'q': q}).toString()),
               ),
-              style: const TextStyle(fontSize: 14),
-              onSubmitted: (q) => context
-                  .go(Uri(path: '/', queryParameters: {'q': q}).toString()),
             ),
-          ),
+          ],
         ],
       ),
       actions: [
@@ -53,9 +61,16 @@ class TopNav extends StatelessWidget implements PreferredSizeWidget {
           PopupMenuButton<String>(
             tooltip: 'Create new',
             icon: const Icon(Icons.add),
-            onSelected: (v) => context.go(v),
+            onSelected: (v) {
+              if (v == 'new-project') {
+                showNewProjectDialog(context);
+              } else {
+                context.go(v);
+              }
+            },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: '/', child: Text('New project')),
+              PopupMenuItem(
+                  value: 'new-project', child: Text('New project')),
               PopupMenuItem(value: '/groups/new', child: Text('New group')),
             ],
           ),

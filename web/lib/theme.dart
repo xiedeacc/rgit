@@ -15,22 +15,22 @@ class RgitTheme {
   static const Color _darkText = Color(0xFFE6EDF3);
 
   static ThemeData light() => _base(
-        brightness: Brightness.light,
-        accent: _lightAccent,
-        background: _lightBg,
-        subtle: _lightSubtle,
-        border: _lightBorder,
-        text: _lightText,
-      );
+    brightness: Brightness.light,
+    accent: _lightAccent,
+    background: _lightBg,
+    subtle: _lightSubtle,
+    border: _lightBorder,
+    text: _lightText,
+  );
 
   static ThemeData dark() => _base(
-        brightness: Brightness.dark,
-        accent: _darkAccent,
-        background: _darkBg,
-        subtle: _darkSubtle,
-        border: _darkBorder,
-        text: _darkText,
-      );
+    brightness: Brightness.dark,
+    accent: _darkAccent,
+    background: _darkBg,
+    subtle: _darkSubtle,
+    border: _darkBorder,
+    text: _darkText,
+  );
 
   static ThemeData _base({
     required Brightness brightness,
@@ -51,6 +51,8 @@ class RgitTheme {
     );
     return ThemeData(
       useMaterial3: true,
+      fontFamily: 'Roboto',
+      fontFamilyFallback: const ['Droid Sans Fallback'],
       brightness: brightness,
       colorScheme: scheme,
       scaffoldBackgroundColor: background,
@@ -90,8 +92,7 @@ class RgitTheme {
 
   /// Monospace style for code views.
   static const TextStyle mono = TextStyle(
-    fontFamily: 'monospace',
-    fontFamilyFallback: <String>['Menlo', 'Consolas', 'Courier New'],
+    fontFamily: 'Roboto Mono',
     fontSize: 13,
     height: 1.5,
   );

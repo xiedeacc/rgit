@@ -10,6 +10,10 @@ authors.workspace = true
 name = "rgit"
 path = "src/main.rs"
 
+[[bin]]
+name = "rgit-shell"
+path = "src/bin/rgit-shell.rs"
+
 [dependencies]
 rgit-core.workspace = true
 rgit-http.workspace = true

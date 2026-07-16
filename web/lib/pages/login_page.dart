@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -14,6 +15,7 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _login = TextEditingController();
   final _password = TextEditingController();
+  final _passwordFocus = FocusNode();
   String? _error;
   bool _busy = false;
 
@@ -21,6 +23,7 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _login.dispose();
     _password.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -35,6 +38,7 @@ class _LoginPageState extends State<LoginPage> {
     });
     try {
       await context.read<SessionState>().login(_login.text, _password.text);
+      TextInput.finishAutofillContext(shouldSave: true);
       if (mounted) context.go('/');
     } catch (e) {
       setState(() => _error = '$e');
@@ -54,50 +58,74 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.merge_type, size: 48),
-                const SizedBox(height: 12),
-                const Text('Sign in to rgit',
-                    style:
-                        TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: border),
-                    borderRadius: BorderRadius.circular(6),
-                    color:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                const Text(
+                  '</>',
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 30,
+                    fontWeight: FontWeight.w700,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (_error != null) ...[
-                        Text(_error!,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Sign in to rgit',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 20),
+                AutofillGroup(
+                  onDisposeAction: AutofillContextAction.cancel,
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: border),
+                      borderRadius: BorderRadius.circular(6),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_error != null) ...[
+                          Text(
+                            _error!,
                             style: TextStyle(
-                                color: Theme.of(context).colorScheme.error)),
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        const Text('Username or email'),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _login,
+                          autofocus: true,
+                          autofillHints: const [AutofillHints.username],
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          textInputAction: TextInputAction.next,
+                          onSubmitted: (_) => _passwordFocus.requestFocus(),
+                        ),
                         const SizedBox(height: 12),
+                        const Text('Password'),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _password,
+                          focusNode: _passwordFocus,
+                          obscureText: true,
+                          autofillHints: const [AutofillHints.password],
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _submit(),
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          onPressed: _busy ? null : _submit,
+                          child: Text(_busy ? 'Signing in…' : 'Sign in'),
+                        ),
                       ],
-                      const Text('Username or email'),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _login,
-                        autofocus: true,
-                        onSubmitted: (_) => _submit(),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text('Password'),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _password,
-                        obscureText: true,
-                        onSubmitted: (_) => _submit(),
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: _busy ? null : _submit,
-                        child: Text(_busy ? 'Signing in…' : 'Sign in'),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),

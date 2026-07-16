@@ -14,7 +14,7 @@ use serde::Deserialize;
 use tokio_util::io::ReaderStream;
 
 use super::projects::locate;
-use super::Pagination;
+use super::{paginated_json, Pagination};
 use crate::error::ApiResult;
 use crate::handlers::helpers::repo_disk_path;
 use crate::middleware::auth::Identity;
@@ -28,7 +28,13 @@ async fn readable_repo(
     id: &str,
 ) -> Result<(rgit_core::models::Project, std::path::PathBuf), Error> {
     let project = locate(state, id).await?;
-    authorize_repo(&state.db, identity.user.as_ref(), &project, RepoAction::Read).await?;
+    authorize_repo(
+        &state.db,
+        identity.user.as_ref(),
+        &project,
+        RepoAction::Read,
+    )
+    .await?;
     let path = repo_disk_path(state, &project);
     Ok((project, path))
 }
@@ -44,6 +50,8 @@ pub struct TreeQuery {
     pub r#ref: Option<String>,
     #[serde(default)]
     pub path: String,
+    pub page: Option<u32>,
+    pub per_page: Option<u32>,
 }
 
 /// GET .../repository/tree
@@ -54,9 +62,17 @@ pub async fn tree(
     Query(q): Query<TreeQuery>,
 ) -> ApiResult<Response> {
     let (project, repo) = readable_repo(&state, &identity, &id).await?;
+    let _operation = state.begin_git_operation().await?;
     let reference = default_ref(&project, q.r#ref);
     let entries = rgit_git::read::list_tree(&state.config.git, &repo, &reference, &q.path).await?;
-    Ok(Json(entries).into_response())
+    let total = entries.len() as i64;
+    let page = Pagination::from_options(q.page, q.per_page);
+    let entries = entries
+        .into_iter()
+        .skip(page.offset() as usize)
+        .take(page.limit() as usize)
+        .collect::<Vec<_>>();
+    Ok(paginated_json(entries, total))
 }
 
 /// GET .../repository/blob — metadata + base64 content (small files).
@@ -67,10 +83,16 @@ pub async fn blob(
     Query(q): Query<TreeQuery>,
 ) -> ApiResult<Response> {
     let (project, repo) = readable_repo(&state, &identity, &id).await?;
+    let _operation = state.begin_git_operation().await?;
     let reference = default_ref(&project, q.r#ref);
-    let bytes =
-        rgit_git::read::read_blob(&state.config.git, &repo, &reference, &q.path, BLOB_JSON_LIMIT)
-            .await?;
+    let bytes = rgit_git::read::read_blob(
+        &state.config.git,
+        &repo,
+        &reference,
+        &q.path,
+        BLOB_JSON_LIMIT,
+    )
+    .await?;
     let binary = bytes.contains(&0);
     Ok(Json(serde_json::json!({
         "path": q.path,
@@ -90,6 +112,7 @@ pub async fn raw(
     Query(q): Query<TreeQuery>,
 ) -> ApiResult<Response> {
     let (project, repo) = readable_repo(&state, &identity, &id).await?;
+    let _operation = state.begin_git_operation().await?;
     let reference = default_ref(&project, q.r#ref);
     let bytes =
         rgit_git::read::read_blob(&state.config.git, &repo, &reference, &q.path, RAW_LIMIT).await?;
@@ -116,8 +139,8 @@ pub async fn raw(
 pub struct CommitsQuery {
     pub r#ref: Option<String>,
     pub path: Option<String>,
-    #[serde(flatten)]
-    pub page: Pagination,
+    pub page: Option<u32>,
+    pub per_page: Option<u32>,
 }
 
 /// GET .../repository/commits
@@ -128,17 +151,22 @@ pub async fn commits(
     Query(q): Query<CommitsQuery>,
 ) -> ApiResult<Response> {
     let (project, repo) = readable_repo(&state, &identity, &id).await?;
+    let _operation = state.begin_git_operation().await?;
     let reference = default_ref(&project, q.r#ref);
+    let page = Pagination::from_options(q.page, q.per_page);
+    let total =
+        rgit_git::read::count_commits(&state.config.git, &repo, &reference, q.path.as_deref())
+            .await?;
     let commits = rgit_git::read::log(
         &state.config.git,
         &repo,
         &reference,
         q.path.as_deref(),
-        q.page.offset() as u32,
-        q.page.limit() as u32,
+        page.offset() as u32,
+        page.limit() as u32,
     )
     .await?;
-    Ok(Json(commits).into_response())
+    Ok(paginated_json(commits, total))
 }
 
 /// GET .../repository/commits/{sha}
@@ -148,6 +176,7 @@ pub async fn commit_detail(
     Path((id, sha)): Path<(String, String)>,
 ) -> ApiResult<Response> {
     let (_, repo) = readable_repo(&state, &identity, &id).await?;
+    let _operation = state.begin_git_operation().await?;
     let commit = rgit_git::read::commit(&state.config.git, &repo, &sha).await?;
     Ok(Json(commit).into_response())
 }
@@ -159,12 +188,9 @@ pub async fn commit_diff(
     Path((id, sha)): Path<(String, String)>,
 ) -> ApiResult<Response> {
     let (_, repo) = readable_repo(&state, &identity, &id).await?;
+    let _operation = state.begin_git_operation().await?;
     let diff = rgit_git::read::commit_diff(&state.config.git, &repo, &sha).await?;
-    Ok((
-        [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
-        diff,
-    )
-        .into_response())
+    Ok(([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], diff).into_response())
 }
 
 /// GET .../repository/branches
@@ -174,6 +200,7 @@ pub async fn branches(
     Path(id): Path<String>,
 ) -> ApiResult<Response> {
     let (_, repo) = readable_repo(&state, &identity, &id).await?;
+    let _operation = state.begin_git_operation().await?;
     Ok(Json(rgit_git::read::branches(&state.config.git, &repo).await?).into_response())
 }
 
@@ -184,6 +211,7 @@ pub async fn tags(
     Path(id): Path<String>,
 ) -> ApiResult<Response> {
     let (_, repo) = readable_repo(&state, &identity, &id).await?;
+    let _operation = state.begin_git_operation().await?;
     Ok(Json(rgit_git::read::tags(&state.config.git, &repo).await?).into_response())
 }
 
@@ -206,6 +234,7 @@ pub async fn archive(
     Query(q): Query<ArchiveQuery>,
 ) -> ApiResult<Response> {
     let (project, repo) = readable_repo(&state, &identity, &id).await?;
+    let operation = state.begin_git_operation().await?;
     let (format, content_type) = match q.format.as_str() {
         "tar.gz" | "tgz" => ("tar.gz", "application/gzip"),
         "zip" => ("zip", "application/zip"),
@@ -217,21 +246,45 @@ pub async fn archive(
     let sha = rgit_git::read::rev_parse(&state.config.git, &repo, &reference).await?;
 
     let mut child = tokio::process::Command::new(&state.config.git.bin)
+        .args([
+            "-c",
+            "filter.lfs.process=",
+            "-c",
+            "filter.lfs.smudge=",
+            "-c",
+            "filter.lfs.required=false",
+        ])
+        .arg(format!("--git-dir={}", repo.display()))
         .arg("archive")
         .arg(format!("--format={format}"))
         .arg(format!("--prefix={}-{}/", project.path, &sha[..8]))
         .arg(&sha)
-        .current_dir(&repo)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
         .kill_on_drop(true)
         .spawn()
         .map_err(|e| Error::Git(format!("git archive spawn failed: {e}")))?;
 
     let stdout = child.stdout.take().expect("stdout piped");
+    let mut stderr = child.stderr.take().expect("stderr piped");
+    let git_config = state.config.git.clone();
     tokio::spawn(async move {
-        let _ = child.wait().await;
+        let _operation = operation;
+        let stderr_task = tokio::spawn(async move {
+            let mut output = Vec::new();
+            let _ = tokio::io::AsyncReadExt::read_to_end(&mut stderr, &mut output).await;
+            output
+        });
+        let status = rgit_git::protocol::wait_with_timeout(&git_config, &mut child).await;
+        let stderr = stderr_task.await.unwrap_or_default();
+        if !matches!(&status, Ok(code) if code.success()) {
+            tracing::warn!(
+                ?status,
+                stderr = %String::from_utf8_lossy(&stderr).trim(),
+                "git archive failed"
+            );
+        }
     });
 
     let filename = format!("{}-{}.{format}", project.path, &sha[..8]);
@@ -256,9 +309,16 @@ pub async fn readme(
     Query(q): Query<TreeQuery>,
 ) -> ApiResult<Response> {
     let (project, repo) = readable_repo(&state, &identity, &id).await?;
+    let _operation = state.begin_git_operation().await?;
     let reference = default_ref(&project, q.r#ref);
     let entries = rgit_git::read::list_tree(&state.config.git, &repo, &reference, "").await?;
-    let candidates = ["README.md", "README", "readme.md", "README.markdown", "README.txt"];
+    let candidates = [
+        "README.md",
+        "README",
+        "readme.md",
+        "README.markdown",
+        "README.txt",
+    ];
     let Some(entry) = candidates
         .iter()
         .find_map(|c| entries.iter().find(|e| e.kind == "blob" && e.name == *c))

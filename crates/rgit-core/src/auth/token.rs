@@ -41,10 +41,7 @@ pub fn hash_token(token: &str) -> String {
 
 /// Look up an unexpired, unrevoked token by its raw value.
 /// Lookup is by sha256 digest, so no timing side channel on the raw token.
-pub async fn find_active_token(
-    db: &SqlitePool,
-    raw: &str,
-) -> Result<Option<PersonalAccessToken>> {
+pub async fn find_active_token(db: &SqlitePool, raw: &str) -> Result<Option<PersonalAccessToken>> {
     let hash = hash_token(raw);
     let token = sqlx::query_as::<_, PersonalAccessToken>(
         r#"

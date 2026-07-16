@@ -31,6 +31,9 @@ String _restPath(GoRouterState state) {
   return raw.startsWith('/') ? raw.substring(1) : raw;
 }
 
+Page<void> _projectPage(GoRouterState state, Widget child) =>
+    NoTransitionPage<void>(key: state.pageKey, child: child);
+
 /// Root widget: MaterialApp.router + go_router route table (DESIGN.md §11).
 class RgitApp extends StatefulWidget {
   const RgitApp({super.key, this.initialLocation = '/'});
@@ -52,7 +55,8 @@ class _RgitAppState extends State<RgitApp> {
       redirect: (context, state) {
         final path = state.uri.path;
         final signedIn = session.isSignedIn;
-        final needsAuth = path.startsWith('/settings') ||
+        final needsAuth =
+            path.startsWith('/settings') ||
             path.startsWith('/admin') ||
             path == '/groups/new';
         if (needsAuth && session.ready && !signedIn) return '/login';
@@ -61,10 +65,7 @@ class _RgitAppState extends State<RgitApp> {
       },
       routes: [
         // Fixed top-level routes first so /:ns cannot swallow them.
-        GoRoute(
-          path: '/login',
-          builder: (context, state) => const LoginPage(),
-        ),
+        GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
         GoRoute(
           path: '/',
           builder: (context, state) =>
@@ -118,75 +119,102 @@ class _RgitAppState extends State<RgitApp> {
         // Project routes. ":path(.+)" is go_router's spelling of "*path".
         GoRoute(
           path: '/:ns/:proj',
-          builder: (context, state) => ProjectHomePage(
-            ns: state.pathParameters['ns']!,
-            proj: state.pathParameters['proj']!,
+          pageBuilder: (context, state) => _projectPage(
+            state,
+            ProjectHomePage(
+              ns: state.pathParameters['ns']!,
+              proj: state.pathParameters['proj']!,
+            ),
           ),
           routes: [
             GoRoute(
               path: 'tree/:ref',
-              builder: (context, state) => TreePage(
-                ns: state.pathParameters['ns']!,
-                proj: state.pathParameters['proj']!,
-                gitRef: state.pathParameters['ref']!,
-                path: '',
+              pageBuilder: (context, state) => _projectPage(
+                state,
+                TreePage(
+                  ns: state.pathParameters['ns']!,
+                  proj: state.pathParameters['proj']!,
+                  gitRef: state.pathParameters['ref']!,
+                  path: '',
+                ),
               ),
               routes: [
                 GoRoute(
                   path: ':path(.+)',
-                  builder: (context, state) => TreePage(
-                    ns: state.pathParameters['ns']!,
-                    proj: state.pathParameters['proj']!,
-                    gitRef: state.pathParameters['ref']!,
-                    path: _restPath(state),
+                  pageBuilder: (context, state) => _projectPage(
+                    state,
+                    TreePage(
+                      ns: state.pathParameters['ns']!,
+                      proj: state.pathParameters['proj']!,
+                      gitRef: state.pathParameters['ref']!,
+                      path: _restPath(state),
+                    ),
                   ),
                 ),
               ],
             ),
             GoRoute(
               path: 'blob/:ref/:path(.+)',
-              builder: (context, state) => BlobPage(
-                ns: state.pathParameters['ns']!,
-                proj: state.pathParameters['proj']!,
-                gitRef: state.pathParameters['ref']!,
-                path: _restPath(state),
+              pageBuilder: (context, state) => _projectPage(
+                state,
+                BlobPage(
+                  ns: state.pathParameters['ns']!,
+                  proj: state.pathParameters['proj']!,
+                  gitRef: state.pathParameters['ref']!,
+                  path: _restPath(state),
+                ),
               ),
             ),
             GoRoute(
               path: 'commits/:ref',
-              builder: (context, state) => CommitsPage(
-                ns: state.pathParameters['ns']!,
-                proj: state.pathParameters['proj']!,
-                gitRef: state.pathParameters['ref']!,
+              pageBuilder: (context, state) => _projectPage(
+                state,
+                CommitsPage(
+                  ns: state.pathParameters['ns']!,
+                  proj: state.pathParameters['proj']!,
+                  gitRef: state.pathParameters['ref']!,
+                ),
               ),
             ),
             GoRoute(
               path: 'commit/:sha',
-              builder: (context, state) => CommitPage(
-                ns: state.pathParameters['ns']!,
-                proj: state.pathParameters['proj']!,
-                sha: state.pathParameters['sha']!,
+              pageBuilder: (context, state) => _projectPage(
+                state,
+                CommitPage(
+                  ns: state.pathParameters['ns']!,
+                  proj: state.pathParameters['proj']!,
+                  sha: state.pathParameters['sha']!,
+                ),
               ),
             ),
             GoRoute(
               path: 'branches',
-              builder: (context, state) => BranchesPage(
-                ns: state.pathParameters['ns']!,
-                proj: state.pathParameters['proj']!,
+              pageBuilder: (context, state) => _projectPage(
+                state,
+                BranchesPage(
+                  ns: state.pathParameters['ns']!,
+                  proj: state.pathParameters['proj']!,
+                ),
               ),
             ),
             GoRoute(
               path: 'tags',
-              builder: (context, state) => TagsPage(
-                ns: state.pathParameters['ns']!,
-                proj: state.pathParameters['proj']!,
+              pageBuilder: (context, state) => _projectPage(
+                state,
+                TagsPage(
+                  ns: state.pathParameters['ns']!,
+                  proj: state.pathParameters['proj']!,
+                ),
               ),
             ),
             GoRoute(
               path: 'settings',
-              builder: (context, state) => ProjectSettingsPage(
-                ns: state.pathParameters['ns']!,
-                proj: state.pathParameters['proj']!,
+              pageBuilder: (context, state) => _projectPage(
+                state,
+                ProjectSettingsPage(
+                  ns: state.pathParameters['ns']!,
+                  proj: state.pathParameters['proj']!,
+                ),
               ),
             ),
           ],

@@ -11,10 +11,16 @@ pub async fn spa(State(state): State<AppState>, uri: Uri) -> Response {
 
     // Path-traversal guard: only serve simple relative paths below root.
     let candidate = if rel.is_empty() { "index.html" } else { rel };
-    let safe = !candidate.split('/').any(|seg| seg.is_empty() || seg == "." || seg == "..");
+    let safe = !candidate
+        .split('/')
+        .any(|seg| seg.is_empty() || seg == "." || seg == "..");
     let path = root.join(candidate);
 
-    let served = if safe && path.is_file() { path } else { root.join("index.html") };
+    let served = if safe && path.is_file() {
+        path
+    } else {
+        root.join("index.html")
+    };
     match tokio::fs::read(&served).await {
         Ok(bytes) => {
             let mime = mime_guess::from_path(&served).first_or_octet_stream();
