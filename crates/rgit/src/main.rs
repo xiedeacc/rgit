@@ -4,6 +4,9 @@
 //!   - HTTP server (REST API + git smart HTTP + LFS + Flutter web assets)
 //!   - OpenSSH authorized_keys synchronization for the rgit-shell forced command
 
+#[cfg(all(unix, not(target_env = "msvc")))]
+mod allocator;
+
 use anyhow::Context;
 use rgit_core::config::AppConfig;
 

@@ -5,6 +5,9 @@
 //! existing storage roots. The GitLab installation is never modified. See
 //! docs/MIGRATION.md for the runbook.
 
+#[cfg(all(unix, not(target_env = "msvc")))]
+mod allocator;
+
 use anyhow::{bail, Context};
 use chrono::NaiveDateTime;
 use clap::Parser;

@@ -1,3 +1,7 @@
+#[cfg(all(unix, not(target_env = "msvc")))]
+#[path = "../allocator.rs"]
+mod allocator;
+
 use std::path::PathBuf;
 
 fn main() {

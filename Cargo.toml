@@ -70,6 +70,7 @@ mime_guess = "2"
 percent-encoding = "2"
 regex = "1"
 url = "2"
+tikv-jemallocator = "0.6"
 
 [profile.release]
 lto = "thin"
