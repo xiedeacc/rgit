@@ -18,7 +18,7 @@ sudo scripts/deploy.sh
 `RGIT_START_SERVICES=1 sudo -E scripts/deploy.sh` 直接启动。
 
 跨机部署：在构建机跑 `cargo build --release` 与 `flutter build web` 后，
-rsync `target/release/rgit*`、`web/build/web`、`scripts/rgit-backup.sh`
+copy `target/release/rgit*`、`web/build/web`、`scripts/rgit-backup.sh`
 到 NAS 对应目录，再手工安装 systemd 单元（模板在 deploy.sh 内）。
 
 发布前可运行 `scripts/test-deploy.sh`，它使用临时目录验收 release 产物、安装

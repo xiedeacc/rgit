@@ -15,7 +15,7 @@ require_command() {
     fi
 }
 
-for command in git rsync sha256sum stat sqlite3 find; do
+for command in git sha256sum stat sqlite3 find; do
     require_command "$command"
 done
 
@@ -94,7 +94,7 @@ done
 
 log "copying bin/, conf/, and data/ into $TARGET_DIR"
 mkdir -p "$TARGET_DIR"
-rsync -a --exclude '/.git/' "$tmp/mirror/" "$TARGET_DIR/"
+find "$tmp/mirror" -mindepth 1 -maxdepth 1 ! -name '.git' -exec cp -a --target-directory="$TARGET_DIR" -- {} +
 
 if [ -f "$TARGET_DIR/data/rgit.db" ]; then
     integrity="$(sqlite3 "$TARGET_DIR/data/rgit.db" 'PRAGMA integrity_check')"

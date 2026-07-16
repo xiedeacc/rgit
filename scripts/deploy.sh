@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Deploy rgit to the NAS layout /opt/usr/local/rgit/{bin,conf,data,logs}
 # and install systemd units (rgit.service, rgit-backup.service/.timer).
-# Mirrors rblog's deploy.sh conventions. Run as root on the target host,
-# or adapt the rsync targets for remote deploys.
+# Mirrors rblog's deploy.sh conventions. Run as root on the target host.
 set -euo pipefail
 
 DEST_DIR="${RGIT_DEST_DIR:-/opt/usr/local/rgit}"

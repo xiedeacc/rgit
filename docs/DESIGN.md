@@ -462,7 +462,7 @@ cookie（浏览器自动带）+ `X-Rgit-Csrf: 1` 头；401 全局跳登录。
 2. `snapshot_sqlite`：对在线 SQLite 执行 `VACUUM INTO`，在 worktree 中生成
    一致的 `data/rgit.db`，不复制在线 WAL 数据库
 3. `reset_generated_split_files`：还原上轮分块状态
-4. `sync_source`：分别以 `rsync -a --delete` 镜像 `bin/conf/data`；排除热数据库
+4. `sync_source`：先清理目标目录，再复制 `bin/conf/data`；排除热数据库
    文件、锁文件、`repositories/` 和 `lfs-objects/`。`logs/`、`.ssh/` 与其他
    顶层目录不进入 worktree，运行用户的 GitHub 私钥绝不入库
 5. `verify_mirror`：只校验 SQLite 快照完整性与必要 schema，不运行 Git 命令
