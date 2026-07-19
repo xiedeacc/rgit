@@ -166,23 +166,30 @@ pub async fn run(config_path: &Path, key_id: i64, original: &str) -> Result<i32,
     .map_err(internal)?
     .ok_or(ShellError::AccessDenied)?;
 
-    let namespace = sqlx::query_as::<_, Namespace>("SELECT * FROM namespaces WHERE path = ?1")
-        .bind(&command.namespace)
-        .fetch_optional(&db)
-        .await
-        .map_err(internal)?
-        .ok_or(ShellError::RepositoryNotFound)?;
-    let project = sqlx::query_as::<_, Project>(
-        "SELECT * FROM projects WHERE namespace_id = ?1 AND path = ?2",
-    )
-    .bind(namespace.id)
-    .bind(&command.project)
-    .fetch_optional(&db)
-    .await
-    .map_err(internal)?
-    .ok_or(ShellError::RepositoryNotFound)?;
-
     let action = command.action.repo_action();
+    let project = match find_project(&db, &command.namespace, &command.project).await? {
+        Some(project) => project,
+        None if command.action == ShellAction::Git(Service::ReceivePack) => {
+            rgit_git::autocreate::ensure_project_for_push(
+                &db,
+                &config.git,
+                &config.storage,
+                &user,
+                &command.namespace,
+                &command.project,
+            )
+            .await
+            .map_err(|error| match error {
+                rgit_core::Error::Forbidden => ShellError::AccessDenied,
+                rgit_core::Error::Invalid(_) | rgit_core::Error::Conflict(_) => {
+                    ShellError::InvalidCommand
+                }
+                rgit_core::Error::NotFound => ShellError::RepositoryNotFound,
+                other => ShellError::Internal(anyhow::Error::from(other)),
+            })?
+        }
+        None => return Err(ShellError::RepositoryNotFound),
+    };
     authorize_repo(&db, Some(&user), &project, action)
         .await
         .map_err(|_| {
@@ -250,6 +257,32 @@ pub async fn run(config_path: &Path, key_id: i64, original: &str) -> Result<i32,
     };
     db.close().await;
     Ok(code)
+}
+
+async fn find_project(
+    db: &sqlx::SqlitePool,
+    namespace_path: &str,
+    project_path: &str,
+) -> Result<Option<Project>, ShellError> {
+    let Some(namespace) =
+        sqlx::query_as::<_, Namespace>("SELECT * FROM namespaces WHERE path = ?1")
+            .bind(namespace_path)
+            .fetch_optional(db)
+            .await
+            .map_err(internal)?
+    else {
+        return Ok(None);
+    };
+    Ok(
+        sqlx::query_as::<_, Project>(
+            "SELECT * FROM projects WHERE namespace_id = ?1 AND path = ?2",
+        )
+        .bind(namespace.id)
+        .bind(project_path)
+        .fetch_optional(db)
+        .await
+        .map_err(internal)?,
+    )
 }
 
 async fn update_after_push(

@@ -4,6 +4,7 @@
 //! gitlab-shell); no libgit2. Repository layout on disk is GitLab
 //! hashed-storage compatible (see rgit-core::storage).
 
+pub mod autocreate;
 pub mod protocol;
 pub mod read;
 pub mod repo;

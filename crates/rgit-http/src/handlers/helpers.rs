@@ -4,36 +4,12 @@ use rgit_core::models::{Namespace, Project};
 use rgit_core::state::AppState;
 use rgit_core::{Error, Result};
 
-/// Path-segment policy (DESIGN.md §7.5): alnum start, then [A-Za-z0-9_.-];
-/// no ".."/"."; no reserved suffixes; not starting with '@' (reserved for
-/// storage prefixes like @hashed).
 pub fn validate_path_segment(s: &str) -> Result<()> {
-    let ok_chars = s
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'));
-    let ok = !s.is_empty()
-        && s.len() <= 255
-        && s.as_bytes()[0].is_ascii_alphanumeric()
-        && ok_chars
-        && s != "."
-        && s != ".."
-        && !s.ends_with(".git")
-        && !s.ends_with(".wiki")
-        && !s.ends_with(".atom");
-    if ok {
-        Ok(())
-    } else {
-        Err(Error::invalid("invalid path segment"))
-    }
+    rgit_core::path::validate_path_segment(s)
 }
 
-/// Reserved first path segments that can never be namespaces.
-pub const RESERVED_ROOTS: &[&str] = &[
-    "api", "admin", "login", "settings", "groups", "assets", "-", "explore",
-];
-
 pub fn is_reserved_root(s: &str) -> bool {
-    RESERVED_ROOTS.contains(&s)
+    rgit_core::path::is_reserved_root(s)
 }
 
 /// Look up a project by namespace path + project path (case-insensitive).

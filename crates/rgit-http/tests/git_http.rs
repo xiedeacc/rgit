@@ -129,6 +129,44 @@ async fn smart_http_supports_push_fetch_shallow_and_submodules() {
     let public_library = format!("http://{addr}/alice/library.git");
     let write_demo = format!("http://alice:{raw_token}@{addr}/alice/demo.git");
     let write_library = format!("http://alice:{raw_token}@{addr}/alice/library.git");
+    let auto_created = format!("http://alice:{raw_token}@{addr}/auto-team/auto-demo.git");
+
+    let auto_work = root.join("auto-work");
+    std::fs::create_dir_all(&auto_work).expect("create auto worktree");
+    git(Some(&auto_work), &["init", "--initial-branch=main"]).await;
+    tokio::fs::write(auto_work.join("README.md"), b"auto-created\n")
+        .await
+        .expect("write auto readme");
+    git(Some(&auto_work), &["add", "README.md"]).await;
+    git(Some(&auto_work), &["commit", "-m", "initial push"]).await;
+    git(
+        Some(&auto_work),
+        &["remote", "add", "origin", &auto_created],
+    )
+    .await;
+    git(Some(&auto_work), &["push", "origin", "main"]).await;
+    let auto_project: (i64, String) = sqlx::query_as(
+        r#"
+        SELECT p.id, p.disk_hash FROM projects p
+        JOIN namespaces n ON n.id = p.namespace_id
+        WHERE n.path = 'auto-team' AND n.kind = 'group' AND p.path = 'auto-demo'
+        "#,
+    )
+    .fetch_one(&state.db)
+    .await
+    .expect("auto-created project");
+    assert!(storage::repo_path(&state.config.storage, &auto_project.1).is_dir());
+    let auto_owner: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*) FROM group_members gm
+        JOIN namespaces n ON n.id = gm.namespace_id
+        WHERE n.path = 'auto-team' AND gm.user_id = 1 AND gm.access_level = 50
+        "#,
+    )
+    .fetch_one(&state.db)
+    .await
+    .expect("auto-created group owner");
+    assert_eq!(auto_owner, 1);
 
     let library_work = root.join("library-work");
     git(

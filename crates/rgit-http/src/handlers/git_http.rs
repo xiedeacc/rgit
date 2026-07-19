@@ -57,10 +57,6 @@ async fn resolve_and_authorize(
     let proj_path = project_path_from_url(proj_segment)
         .map_err(|_| (StatusCode::NOT_FOUND, "not found\n").into_response())?;
 
-    let (_, project) = find_project(state, ns, proj_path)
-        .await
-        .map_err(|_| (StatusCode::NOT_FOUND, "not found\n").into_response())?;
-
     // SSH-issued LFS credentials are deliberately unusable for Git pack APIs.
     if identity.lfs_project().is_some() {
         return Err((
@@ -80,6 +76,36 @@ async fn resolve_and_authorize(
         return Err((StatusCode::FORBIDDEN, "token scope insufficient\n").into_response());
     }
 
+    let project = match find_project(state, ns, proj_path).await {
+        Ok((_, project)) => project,
+        Err(Error::NotFound) if service == Service::ReceivePack => {
+            let Some(user) = identity.user.as_ref() else {
+                return Err(basic_challenge());
+            };
+            let _operation = state
+                .begin_git_operation()
+                .await
+                .map_err(|_| (StatusCode::SERVICE_UNAVAILABLE, "server busy\n").into_response())?;
+            rgit_git::autocreate::ensure_project_for_push(
+                &state.db,
+                &state.config.git,
+                &state.config.storage,
+                user,
+                ns,
+                proj_path,
+            )
+            .await
+            .map_err(auto_create_error)?
+        }
+        Err(Error::NotFound) => {
+            return Err((StatusCode::NOT_FOUND, "not found\n").into_response());
+        }
+        Err(error) => {
+            tracing::error!(%error, "project lookup failed");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR.into_response());
+        }
+    };
+
     match authorize_repo(&state.db, identity.user.as_ref(), &project, action).await {
         Ok(()) => Ok(project),
         Err(Error::Unauthorized) => Err(basic_challenge()),
@@ -93,6 +119,21 @@ async fn resolve_and_authorize(
             }
         }
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR.into_response()),
+    }
+}
+
+fn auto_create_error(error: Error) -> Response {
+    match error {
+        Error::Forbidden => (StatusCode::FORBIDDEN, "access denied\n").into_response(),
+        Error::Invalid(message) => {
+            (StatusCode::UNPROCESSABLE_ENTITY, format!("{message}\n")).into_response()
+        }
+        Error::Conflict(message) => (StatusCode::CONFLICT, format!("{message}\n")).into_response(),
+        Error::Busy => (StatusCode::SERVICE_UNAVAILABLE, "server busy\n").into_response(),
+        error => {
+            tracing::error!(%error, "auto-create project for push failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
     }
 }
 

@@ -6,6 +6,7 @@ pub mod config;
 pub mod db;
 pub mod error;
 pub mod models;
+pub mod path;
 pub mod perm;
 pub mod state;
 pub mod storage;
