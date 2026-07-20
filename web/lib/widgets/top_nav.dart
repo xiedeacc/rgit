@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../build_info.dart';
 import '../state/session.dart';
 import '../pages/project_new_dialog.dart';
 
@@ -25,15 +26,19 @@ class TopNav extends StatelessWidget implements PreferredSizeWidget {
             onTap: () => context.go('/'),
             child: Row(
               children: const [
-                Text('</>',
-                    style: TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700)),
+                Text(
+                  '</>',
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 SizedBox(width: 7),
-                Text('rgit',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                Text(
+                  'rgit',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
               ],
             ),
           ),
@@ -49,14 +54,30 @@ class TopNav extends StatelessWidget implements PreferredSizeWidget {
                   contentPadding: EdgeInsets.symmetric(vertical: 4),
                 ),
                 style: const TextStyle(fontSize: 14),
-                onSubmitted: (q) => context
-                    .go(Uri(path: '/', queryParameters: {'q': q}).toString()),
+                onSubmitted: (q) => context.go(
+                  Uri(path: '/', queryParameters: {'q': q}).toString(),
+                ),
               ),
             ),
           ],
         ],
       ),
       actions: [
+        if (!compact && BuildInfo.label.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Center(
+              child: SelectableText(
+                BuildInfo.label,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontFamily: 'RobotoMono',
+                  fontSize: 13,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+          ),
         if (user != null)
           PopupMenuButton<String>(
             tooltip: 'Create new',
@@ -69,8 +90,7 @@ class TopNav extends StatelessWidget implements PreferredSizeWidget {
               }
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(
-                  value: 'new-project', child: Text('New project')),
+              PopupMenuItem(value: 'new-project', child: Text('New project')),
               PopupMenuItem(value: '/groups/new', child: Text('New group')),
             ],
           ),
@@ -80,9 +100,7 @@ class TopNav extends StatelessWidget implements PreferredSizeWidget {
             icon: CircleAvatar(
               radius: 14,
               child: Text(
-                user.username.isNotEmpty
-                    ? user.username[0].toUpperCase()
-                    : '?',
+                user.username.isNotEmpty ? user.username[0].toUpperCase() : '?',
                 style: const TextStyle(fontSize: 13),
               ),
             ),
@@ -101,11 +119,17 @@ class TopNav extends StatelessWidget implements PreferredSizeWidget {
               ),
               const PopupMenuDivider(),
               const PopupMenuItem(
-                  value: '/settings/profile', child: Text('Settings')),
+                value: '/settings/profile',
+                child: Text('Settings'),
+              ),
               const PopupMenuItem(
-                  value: '/settings/keys', child: Text('SSH keys')),
+                value: '/settings/keys',
+                child: Text('SSH keys'),
+              ),
               const PopupMenuItem(
-                  value: '/settings/tokens', child: Text('Access tokens')),
+                value: '/settings/tokens',
+                child: Text('Access tokens'),
+              ),
               if (user.isAdmin) ...const [
                 PopupMenuDivider(),
                 PopupMenuItem(value: '/admin', child: Text('Admin area')),
@@ -137,17 +161,14 @@ class PageShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: const TopNav(),
-        body: SingleChildScrollView(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: child,
-              ),
-            ),
-          ),
+    appBar: const TopNav(),
+    body: SingleChildScrollView(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: Padding(padding: const EdgeInsets.all(24), child: child),
         ),
-      );
+      ),
+    ),
+  );
 }

@@ -20,11 +20,24 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 log() { echo "[deploy] $*"; }
 
+build_rev() {
+    git -C "$repo_root" rev-parse --short=8 HEAD
+}
+
+build_time() {
+    TZ=Asia/Shanghai git -C "$repo_root" show -s --format=%cd --date=format-local:'%Y%m%d %H:%M' HEAD
+}
+
 build() {
     log "building rust binaries (release)"
     (cd "$repo_root" && cargo build --release --bin rgit --bin rgit-shell --bin rgit-migrate)
     log "building flutter web"
-    (cd "$repo_root/web" && "$FLUTTER_BIN" build web --release)
+    local rev time
+    rev="$(build_rev)"
+    time="$(build_time)"
+    (cd "$repo_root/web" && "$FLUTTER_BIN" build web --release \
+        --dart-define="RGIT_BUILD_REV=${rev}" \
+        --dart-define="RGIT_BUILD_TIME=${time}")
 }
 
 layout() {
