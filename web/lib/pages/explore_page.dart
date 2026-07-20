@@ -11,7 +11,7 @@ import '../widgets/project_card.dart';
 import '../widgets/top_nav.dart';
 import 'project_new_dialog.dart';
 
-/// Explore: visible project list + search (route: /).
+/// Explore: visible project list (route: /).
 class ExplorePage extends StatefulWidget {
   const ExplorePage({super.key, this.initialQuery});
 
@@ -22,9 +22,6 @@ class ExplorePage extends StatefulWidget {
 }
 
 class _ExplorePageState extends State<ExplorePage> {
-  late final TextEditingController _search = TextEditingController(
-    text: widget.initialQuery ?? '',
-  );
   models.Paged<models.Project>? _result;
   Object? _error;
   bool _loading = true;
@@ -41,16 +38,9 @@ class _ExplorePageState extends State<ExplorePage> {
   void didUpdateWidget(ExplorePage old) {
     super.didUpdateWidget(old);
     if (old.initialQuery != widget.initialQuery) {
-      _search.text = widget.initialQuery ?? '';
       _page = 1;
       _load();
     }
-  }
-
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -60,7 +50,7 @@ class _ExplorePageState extends State<ExplorePage> {
     });
     try {
       final result = await context.read<ApiClient>().listProjects(
-        search: _search.text,
+        search: widget.initialQuery ?? '',
         page: _page,
         perPage: _perPage,
       );
@@ -129,18 +119,6 @@ class _ExplorePageState extends State<ExplorePage> {
                   actions,
                 ],
               );
-            },
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _search,
-            decoration: const InputDecoration(
-              hintText: 'Search projects…',
-              prefixIcon: Icon(Icons.search),
-            ),
-            onSubmitted: (_) {
-              _page = 1;
-              _load();
             },
           ),
           const SizedBox(height: 16),

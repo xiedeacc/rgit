@@ -120,6 +120,34 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Create group'), findsOneWidget);
   });
 
+  testWidgets('explore keeps one centered top search field', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final api = ApiClient(
+      httpClient: MockClient(
+        (_) async => http.Response(
+          '[]',
+          200,
+          headers: {'content-type': 'application/json', 'x-total': '0'},
+        ),
+      ),
+      origin: Uri.parse('https://rgit.example.test/'),
+    );
+
+    await tester.pumpWidget(_appWithApi('/', api));
+    await tester.pumpAndSettle();
+
+    final searchFields = tester
+        .widgetList<TextField>(find.byType(TextField))
+        .where((field) => field.decoration?.hintText == 'Search projects')
+        .toList(growable: false);
+    expect(searchFields, hasLength(1));
+    expect(find.text('Search projects…'), findsNothing);
+    expect(find.text('</>'), findsNothing);
+    expect(find.text('rgit'), findsOneWidget);
+  });
+
   testWidgets('project tab routes do not animate', (tester) async {
     await tester.pumpWidget(_app('/ns/proj/commits/main'));
     await tester.pump();

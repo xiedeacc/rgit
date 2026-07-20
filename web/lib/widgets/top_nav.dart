@@ -17,49 +17,56 @@ class TopNav extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final session = context.watch<SessionState>();
     final user = session.user;
-    final compact = MediaQuery.sizeOf(context).width < 700;
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = width < 700;
+    final showSearch =
+        width >= 520 && GoRouterState.of(context).uri.path != '/login';
+    final currentQuery =
+        GoRouterState.of(context).uri.queryParameters['q'] ?? '';
     return AppBar(
       titleSpacing: 16,
       title: Row(
         children: [
           InkWell(
             onTap: () => context.go('/'),
-            child: Row(
-              children: const [
-                Text(
-                  '</>',
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                SizedBox(width: 7),
-                Text(
-                  'rgit',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-              ],
+            child: const Text(
+              'rgit',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
           ),
-          if (!compact) ...[
-            const SizedBox(width: 16),
-            SizedBox(
-              width: 280,
-              height: 34,
-              child: TextField(
-                decoration: const InputDecoration(
-                  hintText: 'Search projects',
-                  prefixIcon: Icon(Icons.search, size: 18),
-                  contentPadding: EdgeInsets.symmetric(vertical: 4),
-                ),
-                style: const TextStyle(fontSize: 14),
-                onSubmitted: (q) => context.go(
-                  Uri(path: '/', queryParameters: {'q': q}).toString(),
+          if (showSearch)
+            Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: SizedBox(
+                    height: 34,
+                    child: TextFormField(
+                      key: ValueKey(currentQuery),
+                      initialValue: currentQuery,
+                      decoration: const InputDecoration(
+                        hintText: 'Search projects',
+                        prefixIcon: Icon(Icons.search, size: 18),
+                        contentPadding: EdgeInsets.symmetric(vertical: 4),
+                      ),
+                      style: const TextStyle(fontSize: 14),
+                      onFieldSubmitted: (q) {
+                        final query = q.trim();
+                        context.go(
+                          Uri(
+                            path: '/',
+                            queryParameters: query.isEmpty
+                                ? null
+                                : {'q': query},
+                          ).toString(),
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
             ),
-          ],
+          if (!showSearch) const Spacer(),
         ],
       ),
       actions: [
