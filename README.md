@@ -11,6 +11,12 @@
 - 备份：systemd timer 每小时将 `bin/`、`conf/`、`data/`（不含仓库/LFS）推送到
   `github.com:xiedeacc/rgit_data`
 
+## Preview
+
+![rgit homepage](docs/previews/rgit_homepage.png)
+
+![rgit settings](docs/previews/rgit_settings.png)
+
 ## 文档
 
 | 文档 | 内容 |
