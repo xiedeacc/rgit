@@ -21,6 +21,9 @@
   script itself. The script builds on dev, uploads artifacts and systemd units
   to the NAS, installs them under `/opt/usr/local/rgit`, restarts rgit, and
   verifies the deployed Web bundle.
+- After every code, documentation, or configuration modification, commit all
+  changed and untracked project files, push the current branch, and deploy by
+  running `/root/src/rust/rgit/scripts/deploy.sh` from the dev checkout.
 - GitLab must remain stopped while rgit accesses the shared storage.
 
 ## Storage And Migration

@@ -9,6 +9,7 @@ import 'package:rgit_web/api/models.dart';
 import 'package:rgit_web/app.dart';
 import 'package:rgit_web/pages/tree_page.dart';
 import 'package:rgit_web/state/session.dart';
+import 'package:rgit_web/widgets/clone_url_box.dart';
 import 'package:rgit_web/widgets/top_nav.dart';
 
 Widget _app(String location) {
@@ -245,6 +246,58 @@ void main() {
     expect(find.text('document install flow'), findsOneWidget);
   });
 
+  testWidgets('tree branch pages keep the latest commit header', (
+    tester,
+  ) async {
+    final api = ApiClient(
+      httpClient: MockClient((request) async {
+        final path = request.url.path;
+        if (path.endsWith('/user')) {
+          return http.Response('{}', 401);
+        }
+        if (path.endsWith('/projects/ns%2Fproj')) {
+          return http.Response(
+            '{"id":1,"namespace_id":1,"name":"Proj","path":"proj",'
+            '"full_path":"ns/proj","namespace_path":"ns","visibility":0,'
+            '"archived":false,"default_branch":"main"}',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (path.endsWith('/repository/tree')) {
+          expect(request.url.queryParameters['ref'], 'config_dns');
+          return http.Response(
+            '[{"name":"config.toml","path":"config.toml","kind":"blob"}]',
+            200,
+            headers: {'content-type': 'application/json', 'x-total': '1'},
+          );
+        }
+        if (path.endsWith('/repository/commits')) {
+          expect(request.url.queryParameters['ref'], 'config_dns');
+          return http.Response(
+            '[{"sha":"9d3a1415abcdef00","message":"branch config\\n",'
+            '"author_name":"ops","author_email":"ops@example.test",'
+            '"authored_at":"2026-07-21T03:04:05+00:00","parents":[]}]',
+            200,
+            headers: {'content-type': 'application/json', 'x-total': '34'},
+          );
+        }
+        return http.Response('{}', 404);
+      }),
+      origin: Uri.parse('https://rgit.example.test/'),
+    );
+
+    await tester.pumpWidget(_appWithApi('/ns/proj/tree/config_dns', api));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ops'), findsOneWidget);
+    expect(find.text('branch config'), findsOneWidget);
+    expect(find.text('9d3a1415'), findsOneWidget);
+    expect(find.text('2026-07-21 11:04:05'), findsOneWidget);
+    expect(find.text('34 Commits'), findsOneWidget);
+    expect(find.text('config.toml'), findsOneWidget);
+  });
+
   test('project preserves server-configured clone URLs', () {
     final project = Project.fromJson({
       'id': 1,
@@ -263,6 +316,25 @@ void main() {
       project.sshCloneUrl,
       'ssh://git@code.example.test:10022/team/demo.git',
     );
+  });
+
+  testWidgets('clone URL box defaults to SSH', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: CloneUrlBox(
+            httpsUrl: 'https://code.example.test/team/demo.git',
+            sshUrl: 'ssh://git@code.example.test:10022/team/demo.git',
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.text('ssh://git@code.example.test:10022/team/demo.git'),
+      findsOneWidget,
+    );
+    expect(find.text('https://code.example.test/team/demo.git'), findsNothing);
   });
 
   test('paged API uses the server total without changing it by page', () async {

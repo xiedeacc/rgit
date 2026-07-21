@@ -15,7 +15,7 @@ class CloneUrlBox extends StatefulWidget {
 }
 
 class _CloneUrlBoxState extends State<CloneUrlBox> {
-  bool _ssh = false;
+  bool _ssh = true;
   bool _copied = false;
 
   String get _url => _ssh ? widget.sshUrl : widget.httpsUrl;
@@ -42,14 +42,14 @@ class _CloneUrlBoxState extends State<CloneUrlBox> {
         children: [
           Row(
             children: [
-              const Text('Clone',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
+              const Text(
+                'Clone',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
               const Spacer(),
               SegmentedButton<bool>(
                 showSelectedIcon: false,
-                style: const ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                ),
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
                 segments: const [
                   ButtonSegment(value: false, label: Text('HTTPS')),
                   ButtonSegment(value: true, label: Text('SSH')),
@@ -64,15 +64,22 @@ class _CloneUrlBoxState extends State<CloneUrlBox> {
             children: [
               Expanded(
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                     border: Border.all(color: border),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: SelectableText(_url,
-                      maxLines: 1, style: RgitTheme.mono),
+                  child: SelectableText(
+                    _url,
+                    maxLines: 1,
+                    style: RgitTheme.mono,
+                  ),
                 ),
               ),
               const SizedBox(width: 6),

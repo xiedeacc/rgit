@@ -6,6 +6,7 @@ import '../api/client.dart';
 import '../api/models.dart' as models;
 import '../widgets/error_view.dart';
 import '../widgets/file_tree_list.dart';
+import '../widgets/latest_commit_header.dart';
 import '../widgets/loading.dart';
 import '../widgets/project_scaffold.dart';
 import '../widgets/project_tabs.dart';
@@ -33,6 +34,8 @@ class TreePage extends StatefulWidget {
 class _TreePageState extends State<TreePage> {
   models.Project? _project;
   List<models.TreeEntry> _entries = const [];
+  models.CommitInfo? _latestCommit;
+  int _commitCount = 0;
   Object? _error;
   bool _loading = true;
 
@@ -63,12 +66,26 @@ class _TreePageState extends State<TreePage> {
     final api = context.read<ApiClient>();
     try {
       _project ??= await api.getProject(_fullPath);
-      final page = await api.tree(
-        _fullPath,
-        ref: widget.gitRef,
-        path: widget.path,
-      );
-      if (mounted) setState(() => _entries = page.items);
+      final results = await Future.wait<Object?>([
+        api.tree(_fullPath, ref: widget.gitRef, path: widget.path),
+        api
+            .commits(_fullPath, ref: widget.gitRef, perPage: 1)
+            .catchError(
+              (_) => const models.Paged<models.CommitInfo>(
+                items: <models.CommitInfo>[],
+                total: 0,
+                page: 1,
+              ),
+            ),
+      ]);
+      if (!mounted) return;
+      final page = results[0] as models.Paged<models.TreeEntry>;
+      final commits = results[1] as models.Paged<models.CommitInfo>;
+      setState(() {
+        _entries = page.items;
+        _latestCommit = commits.items.isEmpty ? null : commits.items.first;
+        _commitCount = commits.total;
+      });
     } catch (e) {
       if (mounted) setState(() => _error = e);
     } finally {
@@ -103,12 +120,24 @@ class _TreePageState extends State<TreePage> {
             const Loading()
           else if (_error != null)
             ErrorView(error: _error!, onRetry: _load)
-          else
+          else ...[
+            LatestCommitHeader(
+              commit: _latestCommit,
+              commitCount: _commitCount,
+              onCommitTap: _latestCommit == null
+                  ? null
+                  : () =>
+                        context.go('/$_fullPath/commit/${_latestCommit!.sha}'),
+              onHistoryTap: () =>
+                  context.go('/$_fullPath/commits/${widget.gitRef}'),
+            ),
             FileTreeList(
               entries: _entries,
               projectFullPath: _fullPath,
               ref: widget.gitRef,
+              hasHeader: true,
             ),
+          ],
         ],
       ),
     );

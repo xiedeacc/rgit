@@ -323,7 +323,7 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
                     }
                   },
                 ),
-                const Divider(),
+                const Divider(height: 24),
                 _DangerRow(
                   title: 'Transfer project',
                   subtitle: 'Move this project to another namespace.',
@@ -369,7 +369,7 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
                     nsId.dispose();
                   },
                 ),
-                const Divider(),
+                const Divider(height: 24),
                 _DangerRow(
                   title: 'Delete project',
                   subtitle:
@@ -467,26 +467,35 @@ class _DangerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-              Text(subtitle, style: theme.textTheme.bodySmall),
-            ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(subtitle, style: theme.textTheme.bodySmall),
+              ],
+            ),
           ),
-        ),
-        OutlinedButton(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: theme.colorScheme.error,
-            side: BorderSide(color: theme.colorScheme.error),
+          const SizedBox(width: 24),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: theme.colorScheme.error,
+              side: BorderSide(color: theme.colorScheme.error),
+              minimumSize: const Size(116, 40),
+            ),
+            onPressed: onPressed,
+            child: Text(buttonLabel),
           ),
-          onPressed: onPressed,
-          child: Text(buttonLabel),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

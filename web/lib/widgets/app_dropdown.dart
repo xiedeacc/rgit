@@ -166,7 +166,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
       math.max(40.0, widget.options.length * 40.0),
     );
     final maxLeft = math.max(8.0, screen.width - menuWidth - 8);
-    final left = (anchor.dx + size.width - menuWidth).clamp(8.0, maxLeft);
+    final left = anchor.dx.clamp(8.0, maxLeft);
     final belowTop = anchor.dy + size.height + 8;
     final top = belowTop + menuHeight <= screen.height - 8
         ? belowTop
