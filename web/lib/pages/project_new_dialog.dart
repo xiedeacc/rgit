@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart' as models;
+import '../widgets/app_dropdown.dart';
 
 /// "New project" dialog: name/path/visibility/description → POST /projects.
 Future<void> showNewProjectDialog(BuildContext context) async {
@@ -30,8 +31,7 @@ Future<void> showNewProjectDialog(BuildContext context) async {
               name: name.text,
               path: p,
               visibility: visibility,
-              description:
-                  description.text.isEmpty ? null : description.text,
+              description: description.text.isEmpty ? null : description.text,
             );
             if (dialogContext.mounted) {
               Navigator.of(dialogContext).pop();
@@ -54,9 +54,12 @@ Future<void> showNewProjectDialog(BuildContext context) async {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (error != null) ...[
-                  Text(error!,
-                      style: TextStyle(
-                          color: Theme.of(dialogContext).colorScheme.error)),
+                  Text(
+                    error!,
+                    style: TextStyle(
+                      color: Theme.of(dialogContext).colorScheme.error,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                 ],
                 TextField(
@@ -68,32 +71,33 @@ Future<void> showNewProjectDialog(BuildContext context) async {
                 TextField(
                   controller: path,
                   decoration: const InputDecoration(
-                      labelText: 'Path (defaults to name)'),
+                    labelText: 'Path (defaults to name)',
+                  ),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: description,
-                  decoration:
-                      const InputDecoration(labelText: 'Description'),
+                  decoration: const InputDecoration(labelText: 'Description'),
                 ),
                 const SizedBox(height: 10),
-                DropdownButtonFormField<int>(
-                  initialValue: visibility,
-                  decoration:
-                      const InputDecoration(labelText: 'Visibility'),
-                  items: const [
-                    DropdownMenuItem(
-                        value: models.Visibility.private,
-                        child: Text('Private')),
-                    DropdownMenuItem(
-                        value: models.Visibility.internal,
-                        child: Text('Internal')),
-                    DropdownMenuItem(
-                        value: models.Visibility.public,
-                        child: Text('Public')),
+                AppDropdown<int>(
+                  label: 'Visibility',
+                  value: visibility,
+                  options: const [
+                    AppDropdownOption(
+                      value: models.Visibility.private,
+                      label: 'Private',
+                    ),
+                    AppDropdownOption(
+                      value: models.Visibility.internal,
+                      label: 'Internal',
+                    ),
+                    AppDropdownOption(
+                      value: models.Visibility.public,
+                      label: 'Public',
+                    ),
                   ],
-                  onChanged: (v) =>
-                      setState(() => visibility = v ?? visibility),
+                  onChanged: (v) => setState(() => visibility = v),
                 ),
               ],
             ),

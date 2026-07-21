@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart' as models;
+import '../widgets/app_dropdown.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
 import '../widgets/project_scaffold.dart';
@@ -121,14 +122,14 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 10),
-              DropdownButtonFormField<int>(
-                initialValue: level,
-                decoration: const InputDecoration(labelText: 'Access level'),
-                items: [
+              AppDropdown<int>(
+                label: 'Access level',
+                value: level,
+                options: [
                   for (final e in models.AccessLevel.labels.entries)
-                    DropdownMenuItem(value: e.key, child: Text(e.value)),
+                    AppDropdownOption(value: e.key, label: e.value),
                 ],
-                onChanged: (v) => setState(() => level = v ?? level),
+                onChanged: (v) => setState(() => level = v),
               ),
             ],
           ),
@@ -224,25 +225,24 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                DropdownButtonFormField<int>(
-                  initialValue: _visibility,
-                  decoration: const InputDecoration(labelText: 'Visibility'),
-                  items: const [
-                    DropdownMenuItem(
+                AppDropdown<int>(
+                  label: 'Visibility',
+                  value: _visibility,
+                  options: const [
+                    AppDropdownOption(
                       value: models.Visibility.private,
-                      child: Text('Private'),
+                      label: 'Private',
                     ),
-                    DropdownMenuItem(
+                    AppDropdownOption(
                       value: models.Visibility.internal,
-                      child: Text('Internal'),
+                      label: 'Internal',
                     ),
-                    DropdownMenuItem(
+                    AppDropdownOption(
                       value: models.Visibility.public,
-                      child: Text('Public'),
+                      label: 'Public',
                     ),
                   ],
-                  onChanged: (v) =>
-                      setState(() => _visibility = v ?? _visibility),
+                  onChanged: (v) => setState(() => _visibility = v),
                 ),
                 const SizedBox(height: 12),
                 FilledButton(

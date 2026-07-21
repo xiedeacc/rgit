@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart' as models;
+import '../widgets/app_dropdown.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
 import '../widgets/top_nav.dart';
@@ -61,15 +62,16 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
   }
 
   void _snack(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _rename() async {
     try {
-      final updated = await context
-          .read<ApiClient>()
-          .updateGroup(_group!.id, {'name': _name.text});
+      final updated = await context.read<ApiClient>().updateGroup(_group!.id, {
+        'name': _name.text,
+      });
       if (!mounted) return;
       setState(() => _group = updated);
       _snack('Group settings saved.');
@@ -95,25 +97,26 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 10),
-              DropdownButtonFormField<int>(
-                initialValue: level,
-                decoration:
-                    const InputDecoration(labelText: 'Access level'),
-                items: [
+              AppDropdown<int>(
+                label: 'Access level',
+                value: level,
+                options: [
                   for (final e in models.AccessLevel.labels.entries)
-                    DropdownMenuItem(value: e.key, child: Text(e.value)),
+                    AppDropdownOption(value: e.key, label: e.value),
                 ],
-                onChanged: (v) => setState(() => level = v ?? level),
+                onChanged: (v) => setState(() => level = v),
               ),
             ],
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Add')),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Add'),
+            ),
           ],
         ),
       ),
@@ -124,9 +127,11 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
         _snack('Enter a numeric user ID.');
       } else {
         try {
-          await context
-              .read<ApiClient>()
-              .addGroupMember(_group!.id, userId: id, accessLevel: level);
+          await context.read<ApiClient>().addGroupMember(
+            _group!.id,
+            userId: id,
+            accessLevel: level,
+          );
           await _load();
           if (mounted) _snack('Member added.');
         } catch (e) {
@@ -139,9 +144,7 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
 
   Future<void> _removeMember(models.Member m) async {
     try {
-      await context
-          .read<ApiClient>()
-          .removeGroupMember(_group!.id, m.userId);
+      await context.read<ApiClient>().removeGroupMember(_group!.id, m.userId);
       await _load();
       if (mounted) _snack('Member removed.');
     } catch (e) {
@@ -155,15 +158,18 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete group'),
         content: Text(
-            'Delete group "${widget.ns}"? All projects must be removed '
-            'first. This cannot be undone.'),
+          'Delete group "${widget.ns}"? All projects must be removed '
+          'first. This cannot be undone.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Delete')),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -185,17 +191,19 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
     }
     if (_error != null) {
       return PageShell(
-          maxWidth: 720,
-          child: ErrorView(error: _error!, onRetry: _load));
+        maxWidth: 720,
+        child: ErrorView(error: _error!, onRetry: _load),
+      );
     }
     return PageShell(
       maxWidth: 720,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Group settings — ${widget.ns}',
-              style: const TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.w600)),
+          Text(
+            'Group settings — ${widget.ns}',
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 16),
           TextField(
             controller: _name,
@@ -204,17 +212,17 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerLeft,
-            child:
-                FilledButton(onPressed: _rename, child: const Text('Save')),
+            child: FilledButton(onPressed: _rename, child: const Text('Save')),
           ),
           const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 12),
           Row(
             children: [
-              const Text('Members',
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w600)),
+              const Text(
+                'Members',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
               const Spacer(),
               OutlinedButton.icon(
                 icon: const Icon(Icons.person_add_outlined, size: 16),
@@ -250,10 +258,14 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Delete group',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                    Text('Removes the group namespace.',
-                        style: theme.textTheme.bodySmall),
+                    const Text(
+                      'Delete group',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      'Removes the group namespace.',
+                      style: theme.textTheme.bodySmall,
+                    ),
                   ],
                 ),
               ),

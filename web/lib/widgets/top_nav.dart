@@ -8,6 +8,7 @@ import '../api/client.dart';
 import '../build_info.dart';
 import '../state/session.dart';
 import '../pages/project_new_dialog.dart';
+import 'app_dropdown.dart';
 
 const double kPageContentMaxWidth = 1012;
 
@@ -365,42 +366,25 @@ class _CreateMenuPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final border = theme.dividerColor;
-    return Material(
-      color: Colors.transparent,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          border: Border.all(color: border),
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _AccountMenuTile(
-                icon: Icons.add_box_outlined,
-                label: 'New project',
-                onTap: () => onSelected('new-project'),
-              ),
-              Divider(height: 1, color: border),
-              _AccountMenuTile(
-                icon: Icons.group_add_outlined,
-                label: 'New group',
-                onTap: () => onSelected('/groups/new'),
-              ),
-            ],
+    final border = Theme.of(context).dividerColor;
+    return AppMenuSurface(
+      borderRadius: 8,
+      shadowAlpha: 0.08,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppMenuTile(
+            icon: Icons.add_box_outlined,
+            label: 'New project',
+            onTap: () => onSelected('new-project'),
           ),
-        ),
+          Divider(height: 1, color: border),
+          AppMenuTile(
+            icon: Icons.group_add_outlined,
+            label: 'New group',
+            onTap: () => onSelected('/groups/new'),
+          ),
+        ],
       ),
     );
   }
@@ -421,135 +405,75 @@ class _AccountMenuPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final border = theme.dividerColor;
-    return Material(
-      color: Colors.transparent,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          border: Border.all(color: border),
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.10),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 18,
-                      child: Text(
-                        username.isNotEmpty ? username[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        username,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          height: 1.2,
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      Icons.swap_horiz,
-                      size: 18,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-              ),
-              Divider(height: 1, color: border),
-              _AccountMenuTile(
-                icon: Icons.settings_outlined,
-                label: 'Settings',
-                onTap: () => onSelected('/settings/profile'),
-              ),
-              _AccountMenuTile(
-                icon: Icons.key_outlined,
-                label: 'SSH keys',
-                onTap: () => onSelected('/settings/keys'),
-              ),
-              _AccountMenuTile(
-                icon: Icons.token_outlined,
-                label: 'Access tokens',
-                onTap: () => onSelected('/settings/tokens'),
-              ),
-              if (isAdmin) ...[
-                Divider(height: 1, color: border),
-                _AccountMenuTile(
-                  icon: Icons.admin_panel_settings_outlined,
-                  label: 'Admin area',
-                  onTap: () => onSelected('/admin'),
-                ),
-              ],
-              Divider(height: 1, color: border),
-              _AccountMenuTile(
-                icon: Icons.logout,
-                label: 'Sign out',
-                onTap: () => onSelected('signout'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AccountMenuTile extends StatelessWidget {
-  const _AccountMenuTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: SizedBox(
-          height: 40,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+    return AppMenuSurface(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             child: Row(
               children: [
-                Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
-                const SizedBox(width: 12),
+                CircleAvatar(
+                  radius: 18,
+                  child: Text(
+                    username.isNotEmpty ? username[0].toUpperCase() : '?',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    label,
-                    style: const TextStyle(fontSize: 14, height: 1.2),
+                    username,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
+                    ),
                   ),
+                ),
+                Icon(
+                  Icons.swap_horiz,
+                  size: 18,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ],
             ),
           ),
-        ),
+          Divider(height: 1, color: border),
+          AppMenuTile(
+            icon: Icons.settings_outlined,
+            label: 'Settings',
+            onTap: () => onSelected('/settings/profile'),
+          ),
+          AppMenuTile(
+            icon: Icons.key_outlined,
+            label: 'SSH keys',
+            onTap: () => onSelected('/settings/keys'),
+          ),
+          AppMenuTile(
+            icon: Icons.token_outlined,
+            label: 'Access tokens',
+            onTap: () => onSelected('/settings/tokens'),
+          ),
+          if (isAdmin) ...[
+            Divider(height: 1, color: border),
+            AppMenuTile(
+              icon: Icons.admin_panel_settings_outlined,
+              label: 'Admin area',
+              onTap: () => onSelected('/admin'),
+            ),
+          ],
+          Divider(height: 1, color: border),
+          AppMenuTile(
+            icon: Icons.logout,
+            label: 'Sign out',
+            onTap: () => onSelected('signout'),
+          ),
+        ],
       ),
     );
   }

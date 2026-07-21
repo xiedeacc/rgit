@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart' as models;
+import '../widgets/app_dropdown.dart';
 import '../widgets/error_view.dart';
 import '../widgets/file_tree_list.dart';
 import '../widgets/loading.dart';
@@ -11,6 +12,19 @@ import '../widgets/markdown_view.dart';
 import '../widgets/project_scaffold.dart';
 import '../widgets/project_tabs.dart';
 import '../widgets/top_nav.dart';
+
+String formatBeijingDateTime(String? value) {
+  if (value == null || value.isEmpty) return '';
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) return value;
+  final beijing = parsed.toUtc().add(const Duration(hours: 8));
+  return '${_fourDigits(beijing.year)}-${_twoDigits(beijing.month)}-'
+      '${_twoDigits(beijing.day)} ${_twoDigits(beijing.hour)}:'
+      '${_twoDigits(beijing.minute)}:${_twoDigits(beijing.second)}';
+}
+
+String _fourDigits(int value) => value.toString().padLeft(4, '0');
+String _twoDigits(int value) => value.toString().padLeft(2, '0');
 
 /// Repo home: file tree + README + clone box + branch dropdown
 /// (route: /:ns/:proj).
@@ -197,7 +211,9 @@ class _LatestCommitHeader extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            commit!.title,
+                            commit!.authorName.isEmpty
+                                ? commit!.title
+                                : commit!.authorName,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 16,
@@ -205,6 +221,17 @@ class _LatestCommitHeader extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (commit!.authorName.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Flexible(
+                            flex: 2,
+                            child: Text(
+                              commit!.title,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                          ),
+                        ],
                         const SizedBox(width: 8),
                         Text(
                           commit!.shortSha,
@@ -219,6 +246,21 @@ class _LatestCommitHeader extends StatelessWidget {
                   ),
           ),
           const SizedBox(width: 12),
+          if (commit != null) ...[
+            Flexible(
+              child: Text(
+                formatBeijingDateTime(commit!.authoredAt),
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontFamily: 'Roboto Mono',
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+          ],
           InkWell(
             onTap: onHistoryTap,
             child: Row(
@@ -257,20 +299,13 @@ class _BranchDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final names = branches.map((b) => b.name).toSet();
     names.add(selected);
-    return DropdownMenu<String>(
-      initialSelection: selected,
-      leadingIcon: const Icon(Icons.call_split, size: 16),
-      textStyle: const TextStyle(fontSize: 13),
-      inputDecorationTheme: const InputDecorationTheme(
-        isDense: true,
-        border: OutlineInputBorder(),
-      ),
-      dropdownMenuEntries: [
-        for (final n in names) DropdownMenuEntry(value: n, label: n),
-      ],
-      onSelected: (v) {
-        if (v != null) onChanged(v);
-      },
+    return AppDropdown<String>(
+      value: selected,
+      width: 180,
+      menuWidth: 220,
+      leadingIcon: Icons.call_split,
+      options: [for (final n in names) AppDropdownOption(value: n, label: n)],
+      onChanged: onChanged,
     );
   }
 }

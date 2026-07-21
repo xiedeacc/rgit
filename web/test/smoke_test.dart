@@ -236,8 +236,11 @@ void main() {
     await tester.pumpWidget(_appWithApi('/ns/proj', api));
     await tester.pumpAndSettle();
 
+    expect(find.text('dev'), findsOneWidget);
     expect(find.text('fix ui'), findsOneWidget);
     expect(find.text('01234567'), findsOneWidget);
+    expect(find.text('2026-07-21 20:00:00'), findsOneWidget);
+    expect(find.text('01234567 · 2026-07-21 20:00:00'), findsNothing);
     expect(find.text('5 Commits'), findsOneWidget);
     expect(find.text('document install flow'), findsOneWidget);
   });
