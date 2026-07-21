@@ -28,11 +28,15 @@ class TopNav extends StatelessWidget implements PreferredSizeWidget {
       titleSpacing: 16,
       title: Row(
         children: [
-          InkWell(
-            onTap: () => context.go('/'),
-            child: const Text(
-              'rgit',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => context.go('/'),
+              child: const Text(
+                'rgit',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
             ),
           ),
           if (showSearch)

@@ -160,6 +160,18 @@ void main() {
     expect(pages, hasLength(2));
   });
 
+  testWidgets('explore route does not animate', (tester) async {
+    await tester.pumpWidget(_app('/'));
+    await tester.pump();
+
+    final pages = tester
+        .widgetList<Navigator>(find.byType(Navigator))
+        .expand((navigator) => navigator.pages)
+        .whereType<NoTransitionPage<void>>()
+        .toList(growable: false);
+    expect(pages, hasLength(1));
+  });
+
   testWidgets('project child routes do not show an app bar back button', (
     tester,
   ) async {

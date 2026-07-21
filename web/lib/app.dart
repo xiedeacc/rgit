@@ -34,6 +34,9 @@ String _restPath(GoRouterState state) {
 Page<void> _projectPage(GoRouterState state, Widget child) =>
     NoTransitionPage<void>(key: state.pageKey, child: child);
 
+Page<void> _plainPage(GoRouterState state, Widget child) =>
+    NoTransitionPage<void>(key: state.pageKey, child: child);
+
 /// Root widget: MaterialApp.router + go_router route table (DESIGN.md §11).
 class RgitApp extends StatefulWidget {
   const RgitApp({super.key, this.initialLocation = '/'});
@@ -68,8 +71,10 @@ class _RgitAppState extends State<RgitApp> {
         GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
         GoRoute(
           path: '/',
-          builder: (context, state) =>
-              ExplorePage(initialQuery: state.uri.queryParameters['q']),
+          pageBuilder: (context, state) => _plainPage(
+            state,
+            ExplorePage(initialQuery: state.uri.queryParameters['q']),
+          ),
         ),
         GoRoute(
           path: '/settings/profile',
