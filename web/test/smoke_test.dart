@@ -160,6 +160,70 @@ void main() {
     expect(pages, hasLength(2));
   });
 
+  testWidgets('project child routes do not show an app bar back button', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app('/ns/proj/commits/main'));
+    await tester.pump();
+
+    expect(find.byType(BackButton), findsNothing);
+  });
+
+  testWidgets('project code page shows latest commit summary', (tester) async {
+    final api = ApiClient(
+      httpClient: MockClient((request) async {
+        final path = request.url.path;
+        if (path.endsWith('/user')) {
+          return http.Response('{}', 401);
+        }
+        if (path.endsWith('/projects/ns%2Fproj')) {
+          return http.Response(
+            '{"id":1,"namespace_id":1,"name":"Proj","path":"proj",'
+            '"full_path":"ns/proj","namespace_path":"ns","visibility":0,'
+            '"archived":false,"default_branch":"main"}',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (path.endsWith('/repository/branches')) {
+          return http.Response(
+            '[{"name":"main","sha":"0123456789abcdef"}]',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (path.endsWith('/repository/tree')) {
+          return http.Response(
+            '[{"name":"README.md","path":"README.md","kind":"blob"}]',
+            200,
+            headers: {'content-type': 'application/json', 'x-total': '1'},
+          );
+        }
+        if (path.endsWith('/repository/commits')) {
+          return http.Response(
+            '[{"sha":"0123456789abcdef","message":"fix ui\\n",'
+            '"author_name":"dev","author_email":"dev@example.test",'
+            '"authored_at":"2026-07-21T12:00:00+00:00","parents":[]}]',
+            200,
+            headers: {'content-type': 'application/json', 'x-total': '5'},
+          );
+        }
+        if (path.endsWith('/repository/readme')) {
+          return http.Response('{}', 404);
+        }
+        return http.Response('{}', 404);
+      }),
+      origin: Uri.parse('https://rgit.example.test/'),
+    );
+
+    await tester.pumpWidget(_appWithApi('/ns/proj', api));
+    await tester.pumpAndSettle();
+
+    expect(find.text('fix ui'), findsOneWidget);
+    expect(find.text('01234567'), findsOneWidget);
+    expect(find.text('5 Commits'), findsOneWidget);
+  });
+
   test('project preserves server-configured clone URLs', () {
     final project = Project.fromJson({
       'id': 1,

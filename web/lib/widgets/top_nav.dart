@@ -24,6 +24,7 @@ class TopNav extends StatelessWidget implements PreferredSizeWidget {
     final currentQuery =
         GoRouterState.of(context).uri.queryParameters['q'] ?? '';
     return AppBar(
+      automaticallyImplyLeading: false,
       titleSpacing: 16,
       title: Row(
         children: [

@@ -28,6 +28,8 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
   models.Project? _project;
   List<models.Branch> _branches = const [];
   List<models.TreeEntry> _entries = const [];
+  models.CommitInfo? _latestCommit;
+  int _commitCount = 0;
   models.ReadmeFile? _readme;
   String? _ref;
   Object? _error;
@@ -65,6 +67,15 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
             .tree(_fullPath, ref: ref)
             .then<List<models.TreeEntry>>((p) => p.items)
             .catchError((_) => const <models.TreeEntry>[]),
+        api
+            .commits(_fullPath, ref: ref, perPage: 1)
+            .catchError(
+              (_) => const models.Paged<models.CommitInfo>(
+                items: <models.CommitInfo>[],
+                total: 0,
+                page: 1,
+              ),
+            ),
         api.readme(_fullPath, ref: ref).catchError((_) => null),
       ]);
       if (!mounted) return;
@@ -73,7 +84,10 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
         _ref = ref;
         _branches = results[0] as List<models.Branch>;
         _entries = results[1] as List<models.TreeEntry>;
-        _readme = results[2] as models.ReadmeFile?;
+        final commits = results[2] as models.Paged<models.CommitInfo>;
+        _latestCommit = commits.items.isEmpty ? null : commits.items.first;
+        _commitCount = commits.total;
+        _readme = results[3] as models.ReadmeFile?;
       });
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -106,8 +120,22 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
       const SizedBox(height: 10),
       if (_loading)
         const Loading()
-      else
-        FileTreeList(entries: _entries, projectFullPath: _fullPath, ref: ref),
+      else ...[
+        _LatestCommitHeader(
+          commit: _latestCommit,
+          commitCount: _commitCount,
+          onCommitTap: _latestCommit == null
+              ? null
+              : () => context.go('/$_fullPath/commit/${_latestCommit!.sha}'),
+          onHistoryTap: () => context.go('/$_fullPath/commits/$ref'),
+        ),
+        FileTreeList(
+          entries: _entries,
+          projectFullPath: _fullPath,
+          ref: ref,
+          hasHeader: true,
+        ),
+      ],
       const SizedBox(height: 16),
       if (_readme != null)
         MarkdownView(data: _readme!.content, title: _readme!.path),
@@ -130,6 +158,86 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
       selected: ProjectTab.code,
       archiveRef: ref,
       child: _repositoryContent(ref),
+    );
+  }
+}
+
+class _LatestCommitHeader extends StatelessWidget {
+  const _LatestCommitHeader({
+    required this.commit,
+    required this.commitCount,
+    required this.onCommitTap,
+    required this.onHistoryTap,
+  });
+
+  final models.CommitInfo? commit;
+  final int commitCount;
+  final VoidCallback? onCommitTap;
+  final VoidCallback onHistoryTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final border = theme.dividerColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        border: Border.all(color: border),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: commit == null
+                ? const Text('No commits yet.')
+                : InkWell(
+                    onTap: onCommitTap,
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            commit!.title,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          commit!.shortSha,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontFamily: 'Roboto Mono',
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 12),
+          InkWell(
+            onTap: onHistoryTap,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.history, size: 18),
+                const SizedBox(width: 6),
+                Text(
+                  '$commitCount Commits',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

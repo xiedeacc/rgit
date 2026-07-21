@@ -17,7 +17,8 @@ class MarkdownView extends StatelessWidget {
     final body = theme.textTheme.bodyMedium?.copyWith(
       fontFamily: 'Roboto',
       fontFamilyFallback: sans,
-      height: 1.55,
+      fontSize: 16,
+      height: 1.5,
       letterSpacing: 0,
     );
     final titleLarge = theme.textTheme.headlineSmall?.copyWith(
@@ -40,9 +41,9 @@ class MarkdownView extends StatelessWidget {
     final markdownStyle = MarkdownStyleSheet.fromTheme(theme).copyWith(
       p: body,
       listBullet: body,
-      h1: titleLarge?.copyWith(fontSize: 26, fontWeight: FontWeight.w600),
-      h2: titleMedium?.copyWith(fontSize: 22, fontWeight: FontWeight.w600),
-      h3: titleMedium?.copyWith(fontSize: 18, fontWeight: FontWeight.w600),
+      h1: titleLarge?.copyWith(fontSize: 32, fontWeight: FontWeight.w600),
+      h2: titleMedium?.copyWith(fontSize: 24, fontWeight: FontWeight.w600),
+      h3: titleMedium?.copyWith(fontSize: 20, fontWeight: FontWeight.w600),
       h4: body?.copyWith(fontSize: 16, fontWeight: FontWeight.w600),
       h5: body?.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
       h6: body?.copyWith(fontSize: 13, fontWeight: FontWeight.w600),

@@ -10,23 +10,34 @@ class FileTreeList extends StatelessWidget {
     required this.entries,
     required this.projectFullPath,
     required this.ref,
+    this.hasHeader = false,
   });
 
   final List<TreeEntry> entries;
   final String projectFullPath;
   final String ref;
+  final bool hasHeader;
 
   @override
   Widget build(BuildContext context) {
-    final sorted = [...entries]..sort((a, b) {
+    final sorted = [...entries]
+      ..sort((a, b) {
         if (a.isDir != b.isDir) return a.isDir ? -1 : 1;
         return a.name.toLowerCase().compareTo(b.name.toLowerCase());
       });
     final border = Theme.of(context).dividerColor;
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: border),
-        borderRadius: BorderRadius.circular(6),
+        border: hasHeader
+            ? Border(
+                left: BorderSide(color: border),
+                right: BorderSide(color: border),
+                bottom: BorderSide(color: border),
+              )
+            : Border.all(color: border),
+        borderRadius: hasHeader
+            ? const BorderRadius.vertical(bottom: Radius.circular(6))
+            : BorderRadius.circular(6),
       ),
       child: Column(
         children: [
@@ -76,9 +87,11 @@ class _FileRow extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(entry.name,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14)),
+              child: Text(
+                entry.name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 16, height: 1.5),
+              ),
             ),
           ],
         ),
