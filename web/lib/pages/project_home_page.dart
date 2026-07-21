@@ -100,36 +100,41 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (error != null) ...[
-                  Text(error!,
-                      style: TextStyle(
-                          color: Theme.of(dialogContext).colorScheme.error)),
+                  Text(
+                    error!,
+                    style: TextStyle(
+                      color: Theme.of(dialogContext).colorScheme.error,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                 ],
                 TextField(
                   controller: namespace,
                   decoration: const InputDecoration(
-                      labelText: 'Target namespace ID (optional)'),
+                    labelText: 'Target namespace ID (optional)',
+                  ),
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: path,
-                  decoration:
-                      const InputDecoration(labelText: 'Path (optional)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Path (optional)',
+                  ),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: name,
-                  decoration:
-                      const InputDecoration(labelText: 'Name (optional)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Name (optional)',
+                  ),
                 ),
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed:
-                  busy ? null : () => Navigator.pop(dialogContext),
+              onPressed: busy ? null : () => Navigator.pop(dialogContext),
               child: const Text('Cancel'),
             ),
             FilledButton.icon(
@@ -142,7 +147,8 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
                           : int.tryParse(namespace.text);
                       if (namespace.text.isNotEmpty && namespaceId == null) {
                         setDialogState(
-                            () => error = 'Namespace ID must be numeric.');
+                          () => error = 'Namespace ID must be numeric.',
+                        );
                         return;
                       }
                       setDialogState(() {
@@ -150,7 +156,9 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
                         error = null;
                       });
                       try {
-                        final fork = await context.read<ApiClient>().forkProject(
+                        final fork = await context
+                            .read<ApiClient>()
+                            .forkProject(
                               project.id,
                               namespaceId: namespaceId,
                               path: path.text.isEmpty ? null : path.text,
@@ -183,72 +191,68 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
   }
 
   Widget _repositoryContent(String ref) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
         children: [
-          Row(
-            children: [
-              _BranchDropdown(
-                branches: _branches,
-                selected: ref,
-                onChanged: (branch) {
-                  _ref = branch;
-                  _load();
-                },
-              ),
-              const Spacer(),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.history, size: 16),
-                label: const Text('Commits'),
-                onPressed: () => context.go('/$_fullPath/commits/$ref'),
-              ),
-            ],
+          _BranchDropdown(
+            branches: _branches,
+            selected: ref,
+            onChanged: (branch) {
+              _ref = branch;
+              _load();
+            },
           ),
-          const SizedBox(height: 10),
-          if (_loading)
-            const Loading()
-          else
-            FileTreeList(
-              entries: _entries,
-              projectFullPath: _fullPath,
-              ref: ref,
-            ),
-          const SizedBox(height: 16),
-          if (_readme != null)
-            MarkdownView(data: _readme!.content, title: _readme!.path),
+          const Spacer(),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.history, size: 16),
+            label: const Text('Commits'),
+            onPressed: () => context.go('/$_fullPath/commits/$ref'),
+          ),
         ],
-      );
+      ),
+      const SizedBox(height: 10),
+      if (_loading)
+        const Loading()
+      else
+        FileTreeList(entries: _entries, projectFullPath: _fullPath, ref: ref),
+      const SizedBox(height: 16),
+      if (_readme != null)
+        MarkdownView(data: _readme!.content, title: _readme!.path),
+    ],
+  );
 
   Widget _cloneSidebar(
-          ApiClient api, models.Project project, String ref) =>
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CloneUrlBox(
-            httpsUrl:
-                project.httpCloneUrl ?? api.httpCloneUrl(project.fullPath),
-            sshUrl: project.sshCloneUrl ?? api.sshCloneUrl(project.fullPath),
+    ApiClient api,
+    models.Project project,
+    String ref,
+  ) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      CloneUrlBox(
+        httpsUrl: project.httpCloneUrl ?? api.httpCloneUrl(project.fullPath),
+        sshUrl: project.sshCloneUrl ?? api.sshCloneUrl(project.fullPath),
+      ),
+      if (context.watch<SessionState>().isSignedIn) ...[
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.fork_right, size: 18),
+            label: const Text('Fork'),
+            onPressed: () => _forkProject(project),
           ),
-          if (context.watch<SessionState>().isSignedIn) ...[
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.fork_right, size: 18),
-                label: const Text('Fork'),
-                onPressed: () => _forkProject(project),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          Text('Download source',
-              style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 4),
-          SelectableText(
-            api.archiveUrl(project.fullPath, ref: ref).toString(),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      );
+        ),
+      ],
+      const SizedBox(height: 12),
+      Text('Download source', style: Theme.of(context).textTheme.titleSmall),
+      const SizedBox(height: 4),
+      SelectableText(
+        api.archiveUrl(project.fullPath, ref: ref).toString(),
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -257,18 +261,25 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
       return const PageShell(child: Loading());
     }
     if (_error != null) {
-      return PageShell(child: ErrorView(error: _error!, onRetry: _load));
+      return PageShell(
+        child: ErrorView(error: _error!, onRetry: _load),
+      );
     }
     final project = _project!;
     final ref = _ref ?? project.defaultBranch ?? 'main';
     return PageShell(
+      maxWidth: 1480,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ProjectHeader(project: project, selected: ProjectTab.code),
           LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth < 760) {
+              const gap = 16.0;
+              const sidebarMinWidth = 300.0;
+              final repoAvailable =
+                  constraints.maxWidth - gap - sidebarMinWidth;
+              if (constraints.maxWidth < 920 || repoAvailable < 520) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -278,12 +289,16 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
                   ],
                 );
               }
+              final targetRepoWidth = MediaQuery.sizeOf(context).width * 0.5;
+              final repoWidth = targetRepoWidth
+                  .clamp(520.0, repoAvailable)
+                  .toDouble();
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(flex: 7, child: _repositoryContent(ref)),
-                  const SizedBox(width: 16),
-                  Expanded(flex: 3, child: _cloneSidebar(api, project, ref)),
+                  SizedBox(width: repoWidth, child: _repositoryContent(ref)),
+                  const SizedBox(width: gap),
+                  Expanded(child: _cloneSidebar(api, project, ref)),
                 ],
               );
             },
@@ -313,8 +328,10 @@ class _BranchDropdown extends StatelessWidget {
       initialSelection: selected,
       leadingIcon: const Icon(Icons.call_split, size: 16),
       textStyle: const TextStyle(fontSize: 13),
-      inputDecorationTheme:
-          const InputDecorationTheme(isDense: true, border: OutlineInputBorder()),
+      inputDecorationTheme: const InputDecorationTheme(
+        isDense: true,
+        border: OutlineInputBorder(),
+      ),
       dropdownMenuEntries: [
         for (final n in names) DropdownMenuEntry(value: n, label: n),
       ],
