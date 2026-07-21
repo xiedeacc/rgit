@@ -1,17 +1,90 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../api/client.dart';
 import '../build_info.dart';
 import '../state/session.dart';
 import '../pages/project_new_dialog.dart';
 
+String formatUptimeSeconds(int totalSeconds) {
+  final safeSeconds = totalSeconds < 0 ? 0 : totalSeconds;
+  final days = safeSeconds ~/ Duration.secondsPerDay;
+  final secondsOfDay = safeSeconds % Duration.secondsPerDay;
+  final hours = secondsOfDay ~/ Duration.secondsPerHour;
+  final minutes =
+      (secondsOfDay % Duration.secondsPerHour) ~/ Duration.secondsPerMinute;
+  final seconds = secondsOfDay % Duration.secondsPerMinute;
+  final time =
+      '${_twoDigits(hours)}:${_twoDigits(minutes)}:${_twoDigits(seconds)}';
+  if (days == 0) return time;
+
+  const daysPerMonth = 30;
+  const daysPerYear = 365;
+  if (days < daysPerMonth) {
+    return '${_twoDigits(days)} $time';
+  }
+  if (days < daysPerYear) {
+    final months = days ~/ daysPerMonth;
+    final remainingDays = days % daysPerMonth;
+    return '${_twoDigits(months)}-${_twoDigits(remainingDays)} $time';
+  }
+
+  final years = days ~/ daysPerYear;
+  final remainingYearDays = days % daysPerYear;
+  final months = remainingYearDays ~/ daysPerMonth;
+  final remainingDays = remainingYearDays % daysPerMonth;
+  return '${_twoDigits(years)}-${_twoDigits(months)}-${_twoDigits(remainingDays)} $time';
+}
+
+String _twoDigits(int value) => value.toString().padLeft(2, '0');
+
 /// GitHub-style top navigation bar: logo, search, avatar menu.
-class TopNav extends StatelessWidget implements PreferredSizeWidget {
+class TopNav extends StatefulWidget implements PreferredSizeWidget {
   const TopNav({super.key});
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+
+  @override
+  State<TopNav> createState() => _TopNavState();
+}
+
+class _TopNavState extends State<TopNav> {
+  Timer? _uptimeTimer;
+  int? _uptimeSeconds;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadUptime());
+  }
+
+  @override
+  void dispose() {
+    _uptimeTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadUptime() async {
+    try {
+      final seconds = await context.read<ApiClient>().uptimeSeconds();
+      if (!mounted) return;
+      setState(() {
+        _uptimeSeconds = seconds;
+      });
+      _uptimeTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        setState(() {
+          _uptimeSeconds = (_uptimeSeconds ?? 0) + 1;
+        });
+      });
+    } catch (_) {
+      // Uptime is informational only; keep navigation usable if status fails.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,6 +148,21 @@ class TopNav extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
+        if (!compact && _uptimeSeconds != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Center(
+              child: SelectableText(
+                formatUptimeSeconds(_uptimeSeconds!),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontFamily: 'RobotoMono',
+                  fontSize: 13,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+          ),
         if (!compact && BuildInfo.label.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(right: 8),

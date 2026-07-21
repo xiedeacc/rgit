@@ -10,10 +10,22 @@ pub mod session;
 pub mod tokens;
 pub mod user;
 
+use axum::extract::State;
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use rgit_core::state::AppState;
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize)]
+pub struct Status {
+    pub uptime_seconds: u64,
+}
+
+pub async fn status(State(state): State<AppState>) -> Json<Status> {
+    let uptime_seconds = state.started_at.elapsed().unwrap_or_default().as_secs();
+    Json(Status { uptime_seconds })
+}
 
 pub async fn not_found() -> Response {
     (

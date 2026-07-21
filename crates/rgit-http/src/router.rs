@@ -13,6 +13,8 @@ pub fn build(state: AppState) -> Router {
     let json_limit = state.config.http.max_json_body;
 
     let api_v1 = Router::new()
+        // public instance status
+        .route("/status", get(api::status))
         // session / current user
         .route(
             "/session",
@@ -287,6 +289,34 @@ mod tests {
             "max-age=63072000"
         );
         assert!(response.headers().contains_key("content-security-policy"));
+
+        state.db.close().await;
+        std::fs::remove_dir_all(root).expect("remove test dir");
+    }
+
+    #[tokio::test]
+    async fn status_reports_uptime_without_auth() {
+        let (state, root) = test_state().await;
+
+        let response = build(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/api/v1/status")
+                    .body(Body::empty())
+                    .expect("status request"),
+            )
+            .await
+            .expect("status response");
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body: serde_json::Value = serde_json::from_slice(
+            &to_bytes(response.into_body(), 1024 * 1024)
+                .await
+                .expect("read status response"),
+        )
+        .expect("parse status response");
+        assert!(body["uptime_seconds"].as_u64().is_some());
 
         state.db.close().await;
         std::fs::remove_dir_all(root).expect("remove test dir");

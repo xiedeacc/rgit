@@ -151,6 +151,18 @@ class ApiClient {
   static String encodeId(Object idOrPath) =>
       idOrPath is int ? '$idOrPath' : Uri.encodeComponent('$idOrPath');
 
+  // ---- Instance status -----------------------------------------------------
+
+  Future<int> uptimeSeconds() async {
+    final body = _map(await _get('/status'));
+    final value = body['uptime_seconds'];
+    return switch (value) {
+      int seconds => seconds,
+      num seconds => seconds.toInt(),
+      _ => int.tryParse('$value') ?? 0,
+    };
+  }
+
   // ---- Session -------------------------------------------------------------
 
   Future<User?> login(String login, String password) async {

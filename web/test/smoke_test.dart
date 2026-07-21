@@ -9,6 +9,7 @@ import 'package:rgit_web/api/models.dart';
 import 'package:rgit_web/app.dart';
 import 'package:rgit_web/pages/tree_page.dart';
 import 'package:rgit_web/state/session.dart';
+import 'package:rgit_web/widgets/top_nav.dart';
 
 Widget _app(String location) {
   final api = ApiClient(origin: Uri.parse('http://localhost:8000/'));
@@ -293,6 +294,32 @@ void main() {
           'bad_response',
         ),
       ),
+    );
+  });
+
+  test('status API returns uptime seconds', () async {
+    final api = ApiClient(
+      httpClient: MockClient((request) async {
+        expect(request.url.path, '/api/v1/status');
+        return http.Response(
+          '{"uptime_seconds":3661}',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+      origin: Uri.parse('https://rgit.example.test/'),
+    );
+
+    expect(await api.uptimeSeconds(), 3661);
+  });
+
+  test('uptime display elides larger units until needed', () {
+    expect(formatUptimeSeconds(3661), '01:01:01');
+    expect(formatUptimeSeconds(86401), '01 00:00:01');
+    expect(formatUptimeSeconds(30 * Duration.secondsPerDay), '01-00 00:00:00');
+    expect(
+      formatUptimeSeconds(365 * Duration.secondsPerDay),
+      '01-00-00 00:00:00',
     );
   });
 }

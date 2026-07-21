@@ -3,12 +3,14 @@
 use crate::config::AppConfig;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::SystemTime;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<AppConfig>,
     pub db: sqlx::SqlitePool,
+    pub started_at: SystemTime,
     operations: OperationTracker,
     git_slots: Arc<Semaphore>,
 }
@@ -85,6 +87,7 @@ impl AppState {
         Self {
             config: Arc::new(config),
             db,
+            started_at: SystemTime::now(),
             operations: OperationTracker::default(),
             git_slots,
         }
