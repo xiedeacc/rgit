@@ -333,9 +333,11 @@ pub async fn readme(
         BLOB_JSON_LIMIT,
     )
     .await?;
+    let content =
+        String::from_utf8(bytes).map_err(|_| Error::invalid("README is not valid UTF-8"))?;
     Ok(Json(serde_json::json!({
         "path": entry.path,
-        "content": String::from_utf8_lossy(&bytes),
+        "content": content,
     }))
     .into_response())
 }
