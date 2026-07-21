@@ -238,6 +238,7 @@ class ApiClient {
 
   Future<Paged<Project>> listProjects({
     String? search,
+    String? namespace,
     int? visibility,
     int page = 1,
     int perPage = 20,
@@ -245,6 +246,7 @@ class ApiClient {
     '/projects',
     {
       if (search != null && search.isNotEmpty) 'search': search,
+      if (namespace != null && namespace.isNotEmpty) 'namespace': namespace,
       if (visibility != null) 'visibility': '$visibility',
       'page': '$page',
       'per_page': '$perPage',

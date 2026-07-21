@@ -150,6 +150,41 @@ void main() {
     expect(find.text('rgit'), findsOneWidget);
   });
 
+  testWidgets('namespace page lists projects by namespace filter', (
+    tester,
+  ) async {
+    final api = ApiClient(
+      httpClient: MockClient((request) async {
+        if (request.url.path.endsWith('/user')) {
+          return http.Response('{}', 401);
+        }
+        if (request.url.path.endsWith('/projects')) {
+          expect(request.url.queryParameters['namespace'], 'xiedeacc');
+          expect(request.url.queryParameters['search'], isNull);
+          return http.Response(
+            '[{"id":1,"namespace_id":2,"name":"rgit","path":"rgit",'
+            '"full_path":"xiedeacc/rgit","namespace_path":"xiedeacc",'
+            '"visibility":0,"archived":false},'
+            '{"id":2,"namespace_id":2,"name":"rblog","path":"rblog",'
+            '"full_path":"xiedeacc/rblog","namespace_path":"xiedeacc",'
+            '"visibility":0,"archived":false}]',
+            200,
+            headers: {'content-type': 'application/json', 'x-total': '2'},
+          );
+        }
+        return http.Response('{}', 404);
+      }),
+      origin: Uri.parse('https://rgit.example.test/'),
+    );
+
+    await tester.pumpWidget(_appWithApi('/xiedeacc', api));
+    await tester.pumpAndSettle();
+
+    expect(find.text('xiedeacc/rgit'), findsOneWidget);
+    expect(find.text('xiedeacc/rblog'), findsOneWidget);
+    expect(find.text('No projects in this namespace.'), findsNothing);
+  });
+
   testWidgets('project tab routes do not animate', (tester) async {
     await tester.pumpWidget(_app('/ns/proj/commits/main'));
     await tester.pump();

@@ -137,6 +137,7 @@ async fn render(state: &AppState, project: &Project) -> Result<serde_json::Value
 pub struct ListQuery {
     #[serde(default)]
     pub search: Option<String>,
+    pub namespace: Option<String>,
     pub visibility: Option<i32>,
     pub page: Option<u32>,
     pub per_page: Option<u32>,
@@ -171,6 +172,7 @@ pub async fn list(
                OR gm.user_id IS NOT NULL OR n.owner_user_id = ?2)
           AND (p.name LIKE ?3 OR p.path LIKE ?3 OR p.description LIKE ?3)
           AND (?5 IS NULL OR p.visibility = ?5)
+          AND (?6 IS NULL OR n.path = ?6)
         "#,
     )
     .bind(visible_floor)
@@ -178,6 +180,7 @@ pub async fn list(
     .bind(&search)
     .bind(is_admin)
     .bind(q.visibility)
+    .bind(&q.namespace)
     .fetch_one(&state.db)
     .await?;
 
@@ -192,8 +195,9 @@ pub async fn list(
                OR gm.user_id IS NOT NULL OR n.owner_user_id = ?2)
           AND (p.name LIKE ?3 OR p.path LIKE ?3 OR p.description LIKE ?3)
           AND (?5 IS NULL OR p.visibility = ?5)
+          AND (?6 IS NULL OR n.path = ?6)
         ORDER BY p.updated_at DESC, p.id DESC
-        LIMIT ?6 OFFSET ?7
+        LIMIT ?7 OFFSET ?8
         "#,
     )
     .bind(visible_floor)
@@ -201,6 +205,7 @@ pub async fn list(
     .bind(&search)
     .bind(is_admin)
     .bind(q.visibility)
+    .bind(&q.namespace)
     .bind(page.limit())
     .bind(page.offset())
     .fetch_all(&state.db)

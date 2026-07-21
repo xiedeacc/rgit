@@ -409,6 +409,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn project_list_can_filter_by_namespace_path() {
+        let (state, root) = test_state().await;
+        insert_token(&state, "rgit_namespace", r#"["read_api"]"#).await;
+        sqlx::query(
+            r#"
+            INSERT INTO namespaces (id, path, name, kind, owner_user_id)
+            VALUES (1, 'admin', 'Admin', 'user', 1),
+                   (2, 'xiedeacc', 'xiedeacc', 'group', NULL),
+                   (3, 'other', 'Other', 'group', NULL);
+            INSERT INTO projects
+                (id, namespace_id, path, name, visibility, disk_id, disk_hash, updated_at)
+            VALUES
+                (1, 2, 'rgit', 'rgit', 0, 1, printf('%064d', 1), '2024-01-03 00:00:00'),
+                (2, 2, 'rblog', 'rblog', 0, 2, printf('%064d', 2), '2024-01-02 00:00:00'),
+                (3, 3, 'rgit', 'other rgit', 0, 3, printf('%064d', 3), '2024-01-04 00:00:00');
+            "#,
+        )
+        .execute(&state.db)
+        .await
+        .expect("insert namespace projects");
+
+        let response = build(state.clone())
+            .oneshot(bearer_request(
+                Method::GET,
+                "/api/v1/projects?namespace=xiedeacc&page=1&per_page=100",
+                "rgit_namespace",
+                Body::empty(),
+            ))
+            .await
+            .expect("namespace project response");
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers().get("x-total").unwrap(), "2");
+        let body: serde_json::Value = serde_json::from_slice(
+            &to_bytes(response.into_body(), 1024 * 1024)
+                .await
+                .expect("read namespace project response"),
+        )
+        .expect("parse namespace project response");
+        let paths: Vec<&str> = body
+            .as_array()
+            .expect("project array")
+            .iter()
+            .map(|project| project["full_path"].as_str().expect("full path"))
+            .collect();
+        assert_eq!(paths, vec!["xiedeacc/rgit", "xiedeacc/rblog"]);
+
+        state.db.close().await;
+        std::fs::remove_dir_all(root).expect("remove test dir");
+    }
+
+    #[tokio::test]
     async fn project_create_and_fork_publish_repositories() {
         let (state, root) = test_state().await;
         sqlx::query(

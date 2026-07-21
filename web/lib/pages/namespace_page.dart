@@ -43,15 +43,27 @@ class _NamespacePageState extends State<NamespacePage> {
       _error = null;
     });
     try {
-      // No dedicated namespace listing endpoint yet: search by namespace
-      // path and keep only projects under it.
-      final page = await context
-          .read<ApiClient>()
-          .listProjects(search: widget.ns, perPage: 100);
+      final api = context.read<ApiClient>();
+      const perPage = 100;
+      final first = await api.listProjects(
+        namespace: widget.ns,
+        page: 1,
+        perPage: perPage,
+      );
+      final projects = [...first.items];
+      var pageNumber = 2;
+      while (projects.length < first.total) {
+        final next = await api.listProjects(
+          namespace: widget.ns,
+          page: pageNumber,
+          perPage: perPage,
+        );
+        if (next.items.isEmpty) break;
+        projects.addAll(next.items);
+        pageNumber++;
+      }
       if (mounted) {
-        setState(() => _projects = page.items
-            .where((p) => p.namespacePath == widget.ns)
-            .toList());
+        setState(() => _projects = projects);
       }
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -71,9 +83,13 @@ class _NamespacePageState extends State<NamespacePage> {
             children: [
               CircleAvatar(child: Text(widget.ns[0].toUpperCase())),
               const SizedBox(width: 12),
-              Text(widget.ns,
-                  style: const TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.w600)),
+              Text(
+                widget.ns,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const Spacer(),
               if (session.isSignedIn)
                 OutlinedButton.icon(
@@ -84,8 +100,10 @@ class _NamespacePageState extends State<NamespacePage> {
             ],
           ),
           const SizedBox(height: 20),
-          const Text('Projects',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const Text(
+            'Projects',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 10),
           if (_loading)
             const Loading()
