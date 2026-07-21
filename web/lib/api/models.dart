@@ -232,6 +232,7 @@ class TreeEntry {
     this.sha,
     this.mode,
     this.size,
+    this.latestCommit,
   });
 
   final String name;
@@ -242,6 +243,7 @@ class TreeEntry {
   final String? sha;
   final String? mode;
   final int? size;
+  final CommitInfo? latestCommit;
 
   bool get isDir => kind == 'tree';
   bool get isSubmodule => kind == 'commit';
@@ -253,6 +255,9 @@ class TreeEntry {
     sha: json['sha'] as String?,
     mode: json['mode'] as String?,
     size: _asIntOrNull(json['size']),
+    latestCommit: json['latest_commit'] is Map<String, dynamic>
+        ? CommitInfo.fromJson(json['latest_commit'] as Map<String, dynamic>)
+        : null,
   );
 }
 

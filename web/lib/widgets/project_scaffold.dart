@@ -27,41 +27,75 @@ class ProjectScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ref = archiveRef ?? project.defaultBranch ?? 'main';
-    return PageShell(
-      maxWidth: 1480,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ProjectHeader(project: project, selected: selected),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              const gap = 16.0;
-              const sidebarMinWidth = 300.0;
-              final sidebar = _ProjectSidebar(project: project, ref: ref);
-              final contentAvailable =
-                  constraints.maxWidth - gap - sidebarMinWidth;
-              if (constraints.maxWidth < 920 || contentAvailable < 520) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [child, const SizedBox(height: 20), sidebar],
-                );
-              }
-              final targetContentWidth = MediaQuery.sizeOf(context).width * 0.5;
-              final contentWidth = targetContentWidth
-                  .clamp(520.0, contentAvailable)
-                  .toDouble();
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(width: contentWidth, child: child),
-                  const SizedBox(width: gap),
-                  Expanded(child: sidebar),
-                ],
-              );
-            },
+    return Scaffold(
+      appBar: const TopNav(),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: LayoutBuilder(
+            builder: (context, constraints) => _ProjectLayout(
+              maxWidth: constraints.maxWidth,
+              header: ProjectHeader(project: project, selected: selected),
+              sidebar: _ProjectSidebar(project: project, ref: ref),
+              child: child,
+            ),
           ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+class _ProjectLayout extends StatelessWidget {
+  const _ProjectLayout({
+    required this.maxWidth,
+    required this.header,
+    required this.sidebar,
+    required this.child,
+  });
+
+  final double maxWidth;
+  final Widget header;
+  final Widget sidebar;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    const gap = 16.0;
+    const sidebarWidth = 300.0;
+    final mainWidth = maxWidth.clamp(0.0, kPageContentMaxWidth).toDouble();
+    final mainLeft = (maxWidth - mainWidth) / 2;
+    final sidebarFits =
+        mainLeft + mainWidth + gap + sidebarWidth <= maxWidth && mainWidth > 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(
+          child: SizedBox(width: mainWidth, child: header),
+        ),
+        if (sidebarFits)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: mainLeft),
+              SizedBox(width: mainWidth, child: child),
+              const SizedBox(width: gap),
+              SizedBox(width: sidebarWidth, child: sidebar),
+              const Expanded(child: SizedBox.shrink()),
+            ],
+          )
+        else
+          Center(
+            child: SizedBox(
+              width: mainWidth,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [child, const SizedBox(height: 20), sidebar],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

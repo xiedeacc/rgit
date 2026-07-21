@@ -74,28 +74,92 @@ class _FileRow extends StatelessWidget {
     final theme = Theme.of(context);
     return InkWell(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-        child: Row(
-          children: [
-            Icon(
-              entry.isDir ? Icons.folder : Icons.insert_drive_file_outlined,
-              size: 18,
-              color: entry.isDir
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final showCommit = constraints.maxWidth >= 560;
+          final showTime = constraints.maxWidth >= 760;
+          final latestCommit = entry.latestCommit;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: showCommit ? 5 : 1,
+                  child: Row(
+                    children: [
+                      Icon(
+                        entry.isDir
+                            ? Icons.folder
+                            : Icons.insert_drive_file_outlined,
+                        size: 18,
+                        color: entry.isDir
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          entry.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 16, height: 1.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (showCommit) ...[
+                  const SizedBox(width: 16),
+                  Expanded(
+                    flex: 4,
+                    child: Text(
+                      latestCommit?.title ?? '',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontSize: 14,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                ],
+                if (showTime) ...[
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    width: 112,
+                    child: Text(
+                      _relativeTime(latestCommit?.authoredAt),
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontSize: 14,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                entry.name,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 16, height: 1.5),
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
+
+  String _relativeTime(String? isoTime) {
+    final parsed = isoTime == null ? null : DateTime.tryParse(isoTime);
+    if (parsed == null) return '';
+    final diff = DateTime.now().difference(parsed.toLocal());
+    if (diff.isNegative || diff.inSeconds < 60) return 'now';
+    if (diff.inMinutes < 60) return _unit(diff.inMinutes, 'minute');
+    if (diff.inHours < 24) return _unit(diff.inHours, 'hour');
+    if (diff.inDays < 30) return _unit(diff.inDays, 'day');
+    if (diff.inDays < 365) return _unit(diff.inDays ~/ 30, 'month');
+    return _unit(diff.inDays ~/ 365, 'year');
+  }
+
+  String _unit(int value, String unit) =>
+      '$value $unit${value == 1 ? '' : 's'} ago';
 }

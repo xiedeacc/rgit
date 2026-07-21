@@ -30,6 +30,7 @@ pub struct TreeEntry {
     pub mode: String,
     pub sha: String,
     pub size: Option<i64>,
+    pub latest_commit: Option<CommitInfo>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -94,6 +95,7 @@ pub async fn list_tree(
             kind: fields[1].to_string(),
             sha: fields[2].to_string(),
             size: fields[3].parse().ok(),
+            latest_commit: None,
         });
     }
     // Directories first, then files, both alphabetical (GitHub-style).
@@ -102,6 +104,21 @@ pub async fn list_tree(
             .cmp(&(a.kind == "tree"))
             .then(a.name.cmp(&b.name))
     });
+    Ok(entries)
+}
+
+pub async fn attach_latest_commits(
+    cfg: &GitConfig,
+    repo: &Path,
+    reference: &str,
+    mut entries: Vec<TreeEntry>,
+) -> Result<Vec<TreeEntry>> {
+    for entry in &mut entries {
+        entry.latest_commit = log(cfg, repo, reference, Some(&entry.path), 0, 1)
+            .await?
+            .into_iter()
+            .next();
+    }
     Ok(entries)
 }
 

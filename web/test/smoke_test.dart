@@ -207,7 +207,11 @@ void main() {
         }
         if (path.endsWith('/repository/tree')) {
           return http.Response(
-            '[{"name":"README.md","path":"README.md","kind":"blob"}]',
+            '[{"name":"README.md","path":"README.md","kind":"blob",'
+            '"latest_commit":{"sha":"fedcba9876543210",'
+            '"message":"document install flow\\n",'
+            '"author_name":"dev","author_email":"dev@example.test",'
+            '"authored_at":"2026-07-21T12:00:00+00:00","parents":[]}}]',
             200,
             headers: {'content-type': 'application/json', 'x-total': '1'},
           );
@@ -235,6 +239,7 @@ void main() {
     expect(find.text('fix ui'), findsOneWidget);
     expect(find.text('01234567'), findsOneWidget);
     expect(find.text('5 Commits'), findsOneWidget);
+    expect(find.text('document install flow'), findsOneWidget);
   });
 
   test('project preserves server-configured clone URLs', () {

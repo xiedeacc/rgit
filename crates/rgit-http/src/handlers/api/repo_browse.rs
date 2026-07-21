@@ -72,6 +72,9 @@ pub async fn tree(
         .skip(page.offset() as usize)
         .take(page.limit() as usize)
         .collect::<Vec<_>>();
+    let entries =
+        rgit_git::read::attach_latest_commits(&state.config.git, &repo, &reference, entries)
+            .await?;
     Ok(paginated_json(entries, total))
 }
 

@@ -9,6 +9,8 @@ import '../build_info.dart';
 import '../state/session.dart';
 import '../pages/project_new_dialog.dart';
 
+const double kPageContentMaxWidth = 1012;
+
 String formatUptimeSeconds(int totalSeconds) {
   final safeSeconds = totalSeconds < 0 ? 0 : totalSeconds;
   final days = safeSeconds ~/ Duration.secondsPerDay;
@@ -254,7 +256,11 @@ class _TopNavState extends State<TopNav> {
 
 /// Standard page scaffold: top nav + centered max-width content.
 class PageShell extends StatelessWidget {
-  const PageShell({super.key, required this.child, this.maxWidth = 1012});
+  const PageShell({
+    super.key,
+    required this.child,
+    this.maxWidth = kPageContentMaxWidth,
+  });
 
   final Widget child;
   final double maxWidth;
@@ -263,10 +269,13 @@ class PageShell extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
     appBar: const TopNav(),
     body: SingleChildScrollView(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: Padding(padding: const EdgeInsets.all(24), child: child),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: child,
+          ),
         ),
       ),
     ),
