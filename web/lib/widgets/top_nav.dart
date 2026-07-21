@@ -199,6 +199,17 @@ class _TopNavState extends State<TopNav> {
         if (user != null)
           PopupMenuButton<String>(
             tooltip: user.username,
+            position: PopupMenuPosition.under,
+            offset: const Offset(0, 8),
+            color: Theme.of(context).colorScheme.surface,
+            surfaceTintColor: Colors.transparent,
+            elevation: 12,
+            shadowColor: Colors.black.withValues(alpha: 0.18),
+            constraints: const BoxConstraints.tightFor(width: 300),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Theme.of(context).dividerColor),
+            ),
             icon: CircleAvatar(
               radius: 14,
               child: Text(
@@ -215,29 +226,54 @@ class _TopNavState extends State<TopNav> {
               }
             },
             itemBuilder: (_) => [
-              PopupMenuItem(
-                value: '/${user.username}',
-                child: Text('Signed in as ${user.username}'),
+              PopupMenuItem<String>(
+                enabled: false,
+                padding: EdgeInsets.zero,
+                height: 78,
+                child: _AccountMenuHeader(username: user.username),
               ),
-              const PopupMenuDivider(),
-              const PopupMenuItem(
+              const PopupMenuDivider(height: 1),
+              const PopupMenuItem<String>(
                 value: '/settings/profile',
-                child: Text('Settings'),
+                padding: EdgeInsets.zero,
+                child: _AccountMenuTile(
+                  icon: Icons.settings_outlined,
+                  label: 'Settings',
+                ),
               ),
-              const PopupMenuItem(
+              const PopupMenuItem<String>(
                 value: '/settings/keys',
-                child: Text('SSH keys'),
+                padding: EdgeInsets.zero,
+                child: _AccountMenuTile(
+                  icon: Icons.key_outlined,
+                  label: 'SSH keys',
+                ),
               ),
-              const PopupMenuItem(
+              const PopupMenuItem<String>(
                 value: '/settings/tokens',
-                child: Text('Access tokens'),
+                padding: EdgeInsets.zero,
+                child: _AccountMenuTile(
+                  icon: Icons.token_outlined,
+                  label: 'Access tokens',
+                ),
               ),
               if (user.isAdmin) ...const [
-                PopupMenuDivider(),
-                PopupMenuItem(value: '/admin', child: Text('Admin area')),
+                PopupMenuDivider(height: 1),
+                PopupMenuItem<String>(
+                  value: '/admin',
+                  padding: EdgeInsets.zero,
+                  child: _AccountMenuTile(
+                    icon: Icons.admin_panel_settings_outlined,
+                    label: 'Admin area',
+                  ),
+                ),
               ],
-              const PopupMenuDivider(),
-              const PopupMenuItem(value: 'signout', child: Text('Sign out')),
+              const PopupMenuDivider(height: 1),
+              const PopupMenuItem<String>(
+                value: 'signout',
+                padding: EdgeInsets.zero,
+                child: _AccountMenuTile(icon: Icons.logout, label: 'Sign out'),
+              ),
             ],
           )
         else
@@ -250,6 +286,74 @@ class _TopNavState extends State<TopNav> {
           ),
         const SizedBox(width: 8),
       ],
+    );
+  }
+}
+
+class _AccountMenuHeader extends StatelessWidget {
+  const _AccountMenuHeader({required this.username});
+
+  final String username;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 24,
+            child: Text(
+              username.isNotEmpty ? username[0].toUpperCase() : '?',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              username,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+          ),
+          Icon(
+            Icons.swap_horiz,
+            size: 22,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountMenuTile extends StatelessWidget {
+  const _AccountMenuTile({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: 48,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 16, height: 1.25),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -5,25 +5,33 @@
 ## 1. 构建 + 安装
 
 ```bash
-# 在构建机（或 NAS 本机，需 rust + flutter）
+# 在 dev 构建机运行；脚本会通过 ssh/rsync 发布到 NAS
 cd /root/src/rust/rgit
-sudo scripts/deploy.sh
+scripts/deploy.sh
 ```
 
-`deploy.sh` 完成：release 构建（rgit / rgit-shell / rgit-migrate）、`flutter build web`、
-铺设 `/opt/usr/local/rgit/{bin,conf,data,logs}`、创建 `git` 运行用户、
-预创建归属于运行用户的 `.ssh` 与 `.backup-worktree`、
-安装并 enable `rgit.service` + `rgit-backup.service` + `rgit-backup.timer`。
-默认不启动，配置和迁移完成后手工启动；全新空实例可用
-`RGIT_START_SERVICES=1 sudo -E scripts/deploy.sh` 直接启动。
+`deploy.sh` 是唯一生产发布入口，完成：
 
-跨机部署：在构建机跑 `cargo build --release` 与 `flutter build web` 后，
-copy `target/release/rgit*`、`web/build/web`、`scripts/rgit-backup.sh`
-到 NAS 对应目录，再手工安装 systemd 单元（模板在 deploy.sh 内）。
+- dev 上 release 构建 `rgit` / `rgit-shell` / `rgit-migrate`
+- dev 上 `flutter build web` 并注入当前 commit 信息
+- 在 NAS 创建 `/tmp/rgit-deploy-<rev>` staging 目录
+- 用 `rsync` 上传二进制、Web bundle、辅助脚本、`conf/rgit.example.toml`
+  和 `scripts/systemd/` 下的 systemd unit
+- 在 NAS 安装到 `/opt/usr/local/rgit/{bin,conf,data,logs}`，上传 unit 到
+  `/etc/systemd/system`，enable timer，重启 `rgit.service`
+- 验证线上 `main.dart.js` 包含本次 commit，且 `rgit.service` active、
+  `gitlab-runsvdir.service` inactive
 
-发布前可运行 `scripts/test-deploy.sh`，它使用临时目录验收 release 产物、安装
-布局、权限和 systemd unit 语法，不写 `/etc` 也不启动服务。部署脚本的对应测试
-开关为 `RGIT_SKIP_BUILD=1`、`RGIT_SYSTEMD_DIR=...`、`RGIT_ENABLE_UNITS=0`。
+常用覆盖项：
+
+```bash
+RGIT_DEPLOY_HOST=nas \
+RGIT_VERIFY_URL=https://rgit.xiedeacc.com \
+scripts/deploy.sh
+```
+
+发布前可运行 `scripts/test-deploy.sh`，它验收 release 产物和
+`scripts/systemd/` unit 语法，不会连接 NAS，也不会写 `/etc`。
 依赖安全检查使用 `scripts/security-audit.sh`；脚本同时验证 SQLx 锁文件中的
 MySQL/RSA 可选依赖不在任何工作区目标的依赖图中。
 

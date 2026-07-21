@@ -4,9 +4,9 @@ import 'package:provider/provider.dart';
 import '../api/client.dart';
 import '../api/models.dart' as models;
 import '../theme.dart';
+import '../widgets/account_shell.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
-import '../widgets/top_nav.dart';
 
 const List<String> _allScopes = <String>[
   'api',
@@ -65,8 +65,9 @@ class _SettingsTokensPageState extends State<SettingsTokensPage> {
   }
 
   void _snack(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _create() async {
@@ -77,10 +78,10 @@ class _SettingsTokensPageState extends State<SettingsTokensPage> {
     setState(() => _busy = true);
     try {
       final token = await context.read<ApiClient>().createToken(
-            name: _name.text,
-            scopes: _scopes.toList(),
-            expiresAt: _expiresAt.text.isEmpty ? null : _expiresAt.text,
-          );
+        name: _name.text,
+        scopes: _scopes.toList(),
+        expiresAt: _expiresAt.text.isEmpty ? null : _expiresAt.text,
+      );
       _name.clear();
       _expiresAt.clear();
       setState(() => _newTokenPlaintext = token.plaintext);
@@ -106,13 +107,16 @@ class _SettingsTokensPageState extends State<SettingsTokensPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final border = theme.dividerColor;
-    return PageShell(
-      maxWidth: 720,
+    return AccountShell(
+      selected: AccountSection.tokens,
+      maxContentWidth: 720,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Personal access tokens',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
+          const Text(
+            'Personal access tokens',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 16),
           if (_newTokenPlaintext != null)
             Container(
@@ -204,10 +208,13 @@ class _SettingsTokensPageState extends State<SettingsTokensPage> {
                       Text(t.name),
                       if (t.revoked) ...[
                         const SizedBox(width: 8),
-                        Text('revoked',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: theme.colorScheme.error)),
+                        Text(
+                          'revoked',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.error,
+                          ),
+                        ),
                       ],
                     ],
                   ),

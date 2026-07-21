@@ -4,9 +4,9 @@ import 'package:provider/provider.dart';
 import '../api/client.dart';
 import '../api/models.dart' as models;
 import '../theme.dart';
+import '../widgets/account_shell.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
-import '../widgets/top_nav.dart';
 
 /// SSH key management (route: /settings/keys).
 class SettingsKeysPage extends StatefulWidget {
@@ -54,16 +54,18 @@ class _SettingsKeysPageState extends State<SettingsKeysPage> {
   }
 
   void _snack(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _add() async {
     setState(() => _busy = true);
     try {
-      await context
-          .read<ApiClient>()
-          .addKey(title: _title.text, key: _key.text);
+      await context.read<ApiClient>().addKey(
+        title: _title.text,
+        key: _key.text,
+      );
       _title.clear();
       _key.clear();
       await _load();
@@ -88,18 +90,23 @@ class _SettingsKeysPageState extends State<SettingsKeysPage> {
   @override
   Widget build(BuildContext context) {
     final border = Theme.of(context).dividerColor;
-    return PageShell(
-      maxWidth: 720,
+    return AccountShell(
+      selected: AccountSection.keys,
+      maxContentWidth: 720,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('SSH keys',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
+          const Text(
+            'SSH keys',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 16),
           TextField(
             controller: _title,
             decoration: const InputDecoration(
-                labelText: 'Title', hintText: 'e.g. work laptop'),
+              labelText: 'Title',
+              hintText: 'e.g. work laptop',
+            ),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -145,8 +152,10 @@ class _SettingsKeysPageState extends State<SettingsKeysPage> {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('SHA256:${k.fingerprintSha256}',
-                          style: RgitTheme.mono.copyWith(fontSize: 11)),
+                      Text(
+                        'SHA256:${k.fingerprintSha256}',
+                        style: RgitTheme.mono.copyWith(fontSize: 11),
+                      ),
                       Text(
                         'Added ${k.createdAt ?? '-'}'
                         '${k.lastUsedAt != null ? ' · last used ${k.lastUsedAt}' : ''}',

@@ -4,9 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart' as models;
+import '../widgets/account_shell.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
-import '../widgets/top_nav.dart';
 import 'admin_dashboard_page.dart' show AdminTabs;
 
 /// Admin project overview (route: /admin/projects).
@@ -36,9 +36,10 @@ class _AdminProjectsPageState extends State<AdminProjectsPage> {
       _error = null;
     });
     try {
-      final page = await context
-          .read<ApiClient>()
-          .adminListProjects(page: _pageNo, perPage: _perPage);
+      final page = await context.read<ApiClient>().adminListProjects(
+        page: _pageNo,
+        perPage: _perPage,
+      );
       if (mounted) setState(() => _page = page);
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -50,17 +51,22 @@ class _AdminProjectsPageState extends State<AdminProjectsPage> {
   @override
   Widget build(BuildContext context) {
     final projects = _page?.items ?? const <models.Project>[];
-    final totalPages =
-        (((_page?.total ?? 0) + _perPage - 1) ~/ _perPage).clamp(1, 1 << 30);
-    return PageShell(
+    final totalPages = (((_page?.total ?? 0) + _perPage - 1) ~/ _perPage).clamp(
+      1,
+      1 << 30,
+    );
+    return AccountShell(
+      selected: AccountSection.admin,
+      maxContentWidth: 920,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const AdminTabs(selected: 'projects'),
           const SizedBox(height: 16),
-          Text('Projects (${_page?.total ?? 0})',
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          Text(
+            'Projects (${_page?.total ?? 0})',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 10),
           if (_loading)
             const Loading()
@@ -79,22 +85,28 @@ class _AdminProjectsPageState extends State<AdminProjectsPage> {
                 ],
                 rows: [
                   for (final p in projects)
-                    DataRow(cells: [
-                      DataCell(Text('${p.id}')),
-                      DataCell(
-                        Text(p.fullPath,
+                    DataRow(
+                      cells: [
+                        DataCell(Text('${p.id}')),
+                        DataCell(
+                          Text(
+                            p.fullPath,
                             style: TextStyle(
-                                color:
-                                    Theme.of(context).colorScheme.primary)),
-                        onTap: () => context.go('/${p.fullPath}'),
-                      ),
-                      DataCell(
-                          Text(models.Visibility.label(p.visibility))),
-                      DataCell(Icon(
-                          p.archived ? Icons.check : Icons.close,
-                          size: 16)),
-                      DataCell(Text(p.defaultBranch ?? '-')),
-                    ]),
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          onTap: () => context.go('/${p.fullPath}'),
+                        ),
+                        DataCell(Text(models.Visibility.label(p.visibility))),
+                        DataCell(
+                          Icon(
+                            p.archived ? Icons.check : Icons.close,
+                            size: 16,
+                          ),
+                        ),
+                        DataCell(Text(p.defaultBranch ?? '-')),
+                      ],
+                    ),
                 ],
               ),
             ),
@@ -114,8 +126,7 @@ class _AdminProjectsPageState extends State<AdminProjectsPage> {
                       child: const Text('Previous'),
                     ),
                     Padding(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Text('Page $_pageNo of $totalPages'),
                     ),
                     TextButton(

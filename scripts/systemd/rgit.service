@@ -1,0 +1,35 @@
+[Unit]
+Description=rgit git service
+RequiresMountsFor=/opt/usr/local/rgit /zfs/gitlab_data/repositories /zfs/gitlab_data/lfs-objects /var/opt/gitlab/.ssh
+After=network.target var-opt.mount zfs-mount.service
+
+[Service]
+Type=simple
+User=git
+WorkingDirectory=/opt/usr/local/rgit
+Environment=RGIT_CONFIG=/opt/usr/local/rgit/conf/rgit.toml
+Environment=HOME=/opt/usr/local/rgit
+ExecStart=/opt/usr/local/rgit/bin/rgit
+Restart=always
+RestartSec=3
+TimeoutStopSec=45
+StandardOutput=append:/opt/usr/local/rgit/logs/rgit.log
+StandardError=append:/opt/usr/local/rgit/logs/rgit.log
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/usr/local/rgit/data /opt/usr/local/rgit/logs /zfs/gitlab_data/repositories /zfs/gitlab_data/lfs-objects /var/opt/gitlab/.ssh
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+UMask=0077
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

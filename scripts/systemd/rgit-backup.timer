@@ -1,0 +1,12 @@
+[Unit]
+Description=hourly rgit backup
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+AccuracySec=1min
+Persistent=true
+Unit=rgit-backup.service
+
+[Install]
+WantedBy=timers.target

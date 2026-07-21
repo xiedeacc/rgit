@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/session.dart';
-import '../widgets/top_nav.dart';
+import '../widgets/account_shell.dart';
 
 /// User profile settings (route: /settings/profile).
 class SettingsProfilePage extends StatefulWidget {
@@ -37,16 +37,16 @@ class _SettingsProfilePageState extends State<SettingsProfilePage> {
   }
 
   void _snack(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _saveProfile() async {
     final session = context.read<SessionState>();
     setState(() => _busy = true);
     try {
-      await session.api
-          .updateProfile(name: _name.text, email: _email.text);
+      await session.api.updateProfile(name: _name.text, email: _email.text);
       await session.refresh();
       if (mounted) _snack('Profile updated.');
     } catch (e) {
@@ -60,8 +60,10 @@ class _SettingsProfilePageState extends State<SettingsProfilePage> {
     final session = context.read<SessionState>();
     setState(() => _busy = true);
     try {
-      await session.api
-          .changePassword(_currentPassword.text, _newPassword.text);
+      await session.api.changePassword(
+        _currentPassword.text,
+        _newPassword.text,
+      );
       _currentPassword.clear();
       _newPassword.clear();
       if (mounted) _snack('Password changed.');
@@ -75,17 +77,22 @@ class _SettingsProfilePageState extends State<SettingsProfilePage> {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<SessionState>().user;
-    return PageShell(
-      maxWidth: 640,
+    return AccountShell(
+      selected: AccountSection.settings,
+      maxContentWidth: 640,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Profile',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
+          const Text(
+            'Profile',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 4),
           if (user != null)
-            Text('Signed in as ${user.username}',
-                style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              'Signed in as ${user.username}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           const SizedBox(height: 16),
           TextField(
             controller: _name,
@@ -107,14 +114,15 @@ class _SettingsProfilePageState extends State<SettingsProfilePage> {
           const SizedBox(height: 32),
           const Divider(),
           const SizedBox(height: 16),
-          const Text('Change password',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const Text(
+            'Change password',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 12),
           TextField(
             controller: _currentPassword,
             obscureText: true,
-            decoration:
-                const InputDecoration(labelText: 'Current password'),
+            decoration: const InputDecoration(labelText: 'Current password'),
           ),
           const SizedBox(height: 12),
           TextField(

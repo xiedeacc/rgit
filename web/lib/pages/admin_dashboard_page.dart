@@ -4,9 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart' as models;
+import '../widgets/account_shell.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
-import '../widgets/top_nav.dart';
 
 /// Admin dashboard: instance stats (route: /admin).
 class AdminDashboardPage extends StatefulWidget {
@@ -55,7 +55,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PageShell(
+    return AccountShell(
+      selected: AccountSection.admin,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -73,11 +74,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 _StatCard(label: 'Users', value: '${_stats!.users}'),
                 _StatCard(label: 'Projects', value: '${_stats!.projects}'),
                 _StatCard(label: 'Groups', value: '${_stats!.groups}'),
+                _StatCard(label: 'LFS objects', value: '${_stats!.lfsObjects}'),
                 _StatCard(
-                    label: 'LFS objects', value: '${_stats!.lfsObjects}'),
-                _StatCard(
-                    label: 'LFS size',
-                    value: _formatBytes(_stats!.lfsBytes)),
+                  label: 'LFS size',
+                  value: _formatBytes(_stats!.lfsBytes),
+                ),
                 _StatCard(label: 'Version', value: _stats!.version),
               ],
             ),
@@ -108,9 +109,10 @@ class _StatCard extends StatelessWidget {
         children: [
           Text(label, style: theme.textTheme.bodySmall),
           const SizedBox(height: 4),
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.w700)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+          ),
         ],
       ),
     );
@@ -134,8 +136,10 @@ class AdminTabs extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Admin area',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
+        const Text(
+          'Admin area',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -144,7 +148,9 @@ class AdminTabs extends StatelessWidget {
                 onTap: () => context.go(route),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 9),
+                    horizontal: 14,
+                    vertical: 9,
+                  ),
                   decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(
@@ -155,12 +161,14 @@ class AdminTabs extends StatelessWidget {
                       ),
                     ),
                   ),
-                  child: Text(label,
-                      style: TextStyle(
-                        fontWeight: id == selected
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                      )),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontWeight: id == selected
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                    ),
+                  ),
                 ),
               ),
           ],
