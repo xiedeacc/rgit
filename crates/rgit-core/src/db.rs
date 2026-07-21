@@ -30,6 +30,11 @@ static MIGRATOR: LazyLock<Migrator> = LazyLock::new(|| Migrator {
             "membership constraints",
             include_str!("../migrations/0005_membership_constraints.sql"),
         ),
+        migration(
+            6,
+            "remove orphan memberships",
+            include_str!("../migrations/0006_remove_orphan_memberships.sql"),
+        ),
     ]),
     ignore_missing: false,
     locking: true,

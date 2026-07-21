@@ -108,7 +108,11 @@ async fn ensure_writable_namespace(
     .await
     .map_err(|error| map_namespace_insert_error(error, namespace_path))?;
     sqlx::query(
-        "INSERT INTO group_members (namespace_id, user_id, access_level) VALUES (?1, ?2, ?3)",
+        r#"
+        INSERT INTO group_members (namespace_id, user_id, access_level)
+        VALUES (?1, ?2, ?3)
+        ON CONFLICT(namespace_id, user_id) DO UPDATE SET access_level = excluded.access_level
+        "#,
     )
     .bind(namespace.id)
     .bind(user.id)

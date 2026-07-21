@@ -26,7 +26,12 @@ fn main() {
     match runtime.block_on(rgit_ssh::shell::run(&config, key_id, &original)) {
         Ok(code) => std::process::exit(code),
         Err(error) => {
-            eprintln!("rgit: {error}");
+            match &error {
+                rgit_ssh::shell::ShellError::Internal(source) => {
+                    eprintln!("rgit: internal error: {source:#}");
+                }
+                _ => eprintln!("rgit: {error}"),
+            }
             std::process::exit(1);
         }
     }

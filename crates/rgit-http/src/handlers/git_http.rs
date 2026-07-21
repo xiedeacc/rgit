@@ -277,6 +277,12 @@ async fn service_rpc(
     };
 
     let repo = repo_disk_path(&state, &project);
+    if service == Service::ReceivePack {
+        if let Err(e) = rgit_git::repo::allow_shallow_updates(&state.config.git, &repo).await {
+            tracing::error!(error = %e, "failed to configure receive-pack");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
     let git_protocol = header_str(&headers, "Git-Protocol");
     let gzipped = header_str(&headers, "content-encoding").as_deref() == Some("gzip");
 
@@ -368,7 +374,7 @@ async fn post_receive(state: &AppState, project_id: i64) -> anyhow::Result<()> {
         .fetch_one(&state.db)
         .await?;
     let repo = repo_disk_path(state, &project);
-    let head = rgit_git::repo::head_branch(&state.config.git, &repo).await?;
+    let head = rgit_git::repo::refresh_head_branch_after_push(&state.config.git, &repo).await?;
     sqlx::query(
         "UPDATE projects SET default_branch = ?1, updated_at = datetime('now') WHERE id = ?2",
     )

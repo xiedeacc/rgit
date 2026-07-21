@@ -130,6 +130,21 @@ pub async fn init_bare(cfg: &GitConfig, path: &Path, default_branch: &str) -> Re
         None,
     )
     .await?;
+    allow_shallow_updates(cfg, path).await?;
+    Ok(())
+}
+
+/// Permit shallow clients to push shallow history into this repository.
+///
+/// This keeps imported third-party mirrors small when callers intentionally
+/// push a single shallow branch instead of a complete upstream history.
+pub async fn allow_shallow_updates(cfg: &GitConfig, repo: &Path) -> Result<()> {
+    run_git(
+        cfg,
+        &["config", "receive.shallowUpdate", "true"],
+        Some(repo),
+    )
+    .await?;
     Ok(())
 }
 
@@ -177,6 +192,29 @@ pub async fn head_branch(cfg: &GitConfig, repo: &Path) -> Result<Option<String>>
     }
 }
 
+/// Return a usable default branch after a push.
+///
+/// Newly auto-created repositories start with HEAD pointing at `main`, but the
+/// first push may create `master`, `develop`, or another branch. In that case,
+/// move HEAD to an actual branch so repository browsing and clone defaults do
+/// not point at an unborn ref.
+pub async fn refresh_head_branch_after_push(
+    cfg: &GitConfig,
+    repo: &Path,
+) -> Result<Option<String>> {
+    if let Some(head) = head_branch(cfg, repo).await? {
+        if branch_exists(cfg, repo, &head).await? {
+            return Ok(Some(head));
+        }
+    }
+
+    let Some(branch) = first_branch(cfg, repo).await? else {
+        return Ok(None);
+    };
+    set_head_branch(cfg, repo, &branch).await?;
+    Ok(Some(branch))
+}
+
 /// Point HEAD at another branch (project default branch setting).
 pub async fn set_head_branch(cfg: &GitConfig, repo: &Path, branch: &str) -> Result<()> {
     run_git(
@@ -186,4 +224,37 @@ pub async fn set_head_branch(cfg: &GitConfig, repo: &Path, branch: &str) -> Resu
     )
     .await?;
     Ok(())
+}
+
+async fn branch_exists(cfg: &GitConfig, repo: &Path, branch: &str) -> Result<bool> {
+    let reference = format!("refs/heads/{branch}");
+    let out = run_git(
+        cfg,
+        &["show-ref", "--verify", "--quiet", &reference],
+        Some(repo),
+    )
+    .await;
+    match out {
+        Ok(_) => Ok(true),
+        Err(Error::Git(_)) => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+async fn first_branch(cfg: &GitConfig, repo: &Path) -> Result<Option<String>> {
+    let out = run_git(
+        cfg,
+        &[
+            "for-each-ref",
+            "--sort=-committerdate",
+            "--format=%(refname:short)",
+            "refs/heads",
+        ],
+        Some(repo),
+    )
+    .await?;
+    Ok(String::from_utf8_lossy(&out)
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .map(|line| line.trim().to_string()))
 }

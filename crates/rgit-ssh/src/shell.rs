@@ -209,6 +209,11 @@ pub async fn run(config_path: &Path, key_id: i64, original: &str) -> Result<i32,
     let code = match command.action {
         ShellAction::Git(service) => {
             let repository = rgit_core::storage::repo_path(&config.storage, &project.disk_hash);
+            if service == Service::ReceivePack {
+                rgit_git::repo::allow_shallow_updates(&config.git, &repository)
+                    .await
+                    .map_err(|error| ShellError::Internal(anyhow::Error::from(error)))?;
+            }
             let protocol = std::env::var("GIT_PROTOCOL").ok();
             let status = rgit_git::protocol::run_ssh_service_stdio(
                 &config.git,
@@ -291,7 +296,7 @@ async fn update_after_push(
     project: &Project,
 ) -> Result<(), ShellError> {
     let repository = rgit_core::storage::repo_path(&config.storage, &project.disk_hash);
-    let head = rgit_git::repo::head_branch(&config.git, &repository)
+    let head = rgit_git::repo::refresh_head_branch_after_push(&config.git, &repository)
         .await
         .map_err(|error| ShellError::Internal(anyhow::Error::from(error)))?;
     sqlx::query(
