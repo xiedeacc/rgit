@@ -7,6 +7,7 @@ import '../api/models.dart' as models;
 import '../theme.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
+import '../widgets/project_scaffold.dart';
 import '../widgets/project_tabs.dart';
 import '../widgets/top_nav.dart';
 
@@ -62,8 +63,12 @@ class _CommitsPageState extends State<CommitsPage> {
     final api = context.read<ApiClient>();
     try {
       _project ??= await api.getProject(_fullPath);
-      final page = await api.commits(_fullPath,
-          ref: widget.gitRef, page: _pageNo, perPage: _perPage);
+      final page = await api.commits(
+        _fullPath,
+        ref: widget.gitRef,
+        page: _pageNo,
+        perPage: _perPage,
+      );
       if (mounted) setState(() => _page = page);
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -76,17 +81,29 @@ class _CommitsPageState extends State<CommitsPage> {
   Widget build(BuildContext context) {
     final border = Theme.of(context).dividerColor;
     final commits = _page?.items ?? const <models.CommitInfo>[];
-    final totalPages =
-        (((_page?.total ?? 0) + _perPage - 1) ~/ _perPage).clamp(1, 1 << 30);
-    return PageShell(
+    final totalPages = (((_page?.total ?? 0) + _perPage - 1) ~/ _perPage).clamp(
+      1,
+      1 << 30,
+    );
+    if (_error != null && _project == null) {
+      return PageShell(
+        child: ErrorView(error: _error!, onRetry: _load),
+      );
+    }
+    if (_project == null) {
+      return const PageShell(child: Loading());
+    }
+    return ProjectScaffold(
+      project: _project!,
+      selected: ProjectTab.commits,
+      archiveRef: widget.gitRef,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_project != null)
-            ProjectHeader(project: _project!, selected: ProjectTab.commits),
-          Text('Commits on ${widget.gitRef}',
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          Text(
+            'Commits on ${widget.gitRef}',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 10),
           if (_loading)
             const Loading()
@@ -104,8 +121,8 @@ class _CommitsPageState extends State<CommitsPage> {
                     if (i > 0) Divider(height: 1, color: border),
                     _CommitRow(
                       commit: commits[i],
-                      onTap: () => context
-                          .go('/$_fullPath/commit/${commits[i].sha}'),
+                      onTap: () =>
+                          context.go('/$_fullPath/commit/${commits[i].sha}'),
                     ),
                   ],
                   if (commits.isEmpty)
@@ -173,9 +190,11 @@ class _CommitRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(commit.title,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    commit.title,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     '${commit.authorName} · ${commit.authoredAt ?? ''}',
@@ -186,8 +205,7 @@ class _CommitRow extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 border: Border.all(color: theme.dividerColor),
                 borderRadius: BorderRadius.circular(6),

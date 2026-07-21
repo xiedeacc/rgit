@@ -7,6 +7,7 @@ import '../api/models.dart' as models;
 import '../widgets/error_view.dart';
 import '../widgets/file_tree_list.dart';
 import '../widgets/loading.dart';
+import '../widgets/project_scaffold.dart';
 import '../widgets/project_tabs.dart';
 import '../widgets/top_nav.dart';
 
@@ -62,8 +63,11 @@ class _TreePageState extends State<TreePage> {
     final api = context.read<ApiClient>();
     try {
       _project ??= await api.getProject(_fullPath);
-      final page = await api.tree(_fullPath,
-          ref: widget.gitRef, path: widget.path);
+      final page = await api.tree(
+        _fullPath,
+        ref: widget.gitRef,
+        path: widget.path,
+      );
       if (mounted) setState(() => _entries = page.items);
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -74,12 +78,21 @@ class _TreePageState extends State<TreePage> {
 
   @override
   Widget build(BuildContext context) {
-    return PageShell(
+    if (_error != null && _project == null) {
+      return PageShell(
+        child: ErrorView(error: _error!, onRetry: _load),
+      );
+    }
+    if (_project == null) {
+      return const PageShell(child: Loading());
+    }
+    return ProjectScaffold(
+      project: _project!,
+      selected: ProjectTab.code,
+      archiveRef: widget.gitRef,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_project != null)
-            ProjectHeader(project: _project!, selected: ProjectTab.code),
           PathBreadcrumbs(
             fullPath: _fullPath,
             gitRef: widget.gitRef,
@@ -118,15 +131,17 @@ class PathBreadcrumbs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final parts =
-        path.isEmpty ? const <String>[] : path.split('/');
+    final parts = path.isEmpty ? const <String>[] : path.split('/');
     final crumbs = <Widget>[
       InkWell(
         onTap: () => context.go('/$fullPath'),
-        child: Text(fullPath.split('/').last,
-            style: TextStyle(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w600)),
+        child: Text(
+          fullPath.split('/').last,
+          style: TextStyle(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     ];
     var acc = '';
@@ -136,30 +151,42 @@ class PathBreadcrumbs extends StatelessWidget {
       final isLast = i == parts.length - 1;
       crumbs
         ..add(const Text(' / '))
-        ..add(isLast
-            ? Text(parts[i],
-                style: const TextStyle(fontWeight: FontWeight.w600))
-            : InkWell(
-                onTap: () => context.go('/$fullPath/tree/$gitRef/$target'),
-                child: Text(parts[i],
-                    style: TextStyle(color: theme.colorScheme.primary)),
-              ));
+        ..add(
+          isLast
+              ? Text(
+                  parts[i],
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                )
+              : InkWell(
+                  onTap: () => context.go('/$fullPath/tree/$gitRef/$target'),
+                  child: Text(
+                    parts[i],
+                    style: TextStyle(color: theme.colorScheme.primary),
+                  ),
+                ),
+        );
     }
-    return Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
-      Container(
-        margin: const EdgeInsets.only(right: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          border: Border.all(color: theme.dividerColor),
-          borderRadius: BorderRadius.circular(6),
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(right: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            border: Border.all(color: theme.dividerColor),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.call_split, size: 14),
+              const SizedBox(width: 4),
+              Text(gitRef, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.call_split, size: 14),
-          const SizedBox(width: 4),
-          Text(gitRef, style: const TextStyle(fontSize: 12)),
-        ]),
-      ),
-      ...crumbs,
-    ]);
+        ...crumbs,
+      ],
+    );
   }
 }

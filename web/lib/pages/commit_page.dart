@@ -6,6 +6,7 @@ import '../api/models.dart' as models;
 import '../theme.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
+import '../widgets/project_scaffold.dart';
 import '../widgets/project_tabs.dart';
 import '../widgets/top_nav.dart';
 
@@ -80,12 +81,20 @@ class _CommitPageState extends State<CommitPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final border = theme.dividerColor;
-    return PageShell(
+    if (_error != null && _project == null) {
+      return PageShell(
+        child: ErrorView(error: _error!, onRetry: _load),
+      );
+    }
+    if (_project == null) {
+      return const PageShell(child: Loading());
+    }
+    return ProjectScaffold(
+      project: _project!,
+      selected: ProjectTab.commits,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_project != null)
-            ProjectHeader(project: _project!, selected: ProjectTab.commits),
           if (_loading)
             const Loading()
           else if (_error != null)
@@ -101,9 +110,13 @@ class _CommitPageState extends State<CommitPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_commit!.title,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w600)),
+                  Text(
+                    _commit!.title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   Text(
                     '${_commit!.authorName} <${_commit!.authorEmail}> · '
@@ -111,16 +124,14 @@ class _CommitPageState extends State<CommitPage> {
                     style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(height: 6),
-                  SelectableText('commit ${_commit!.sha}',
-                      style: RgitTheme.mono),
+                  SelectableText(
+                    'commit ${_commit!.sha}',
+                    style: RgitTheme.mono,
+                  ),
                   if (_commit!.message.contains('\n')) ...[
                     const SizedBox(height: 10),
                     SelectableText(
-                      _commit!.message
-                          .split('\n')
-                          .skip(1)
-                          .join('\n')
-                          .trim(),
+                      _commit!.message.split('\n').skip(1).join('\n').trim(),
                       style: theme.textTheme.bodyMedium,
                     ),
                   ],

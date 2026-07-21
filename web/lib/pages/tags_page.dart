@@ -7,6 +7,7 @@ import '../api/models.dart' as models;
 import '../theme.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
+import '../widgets/project_scaffold.dart';
 import '../widgets/project_tabs.dart';
 import '../widgets/top_nav.dart';
 
@@ -56,14 +57,24 @@ class _TagsPageState extends State<TagsPage> {
   Widget build(BuildContext context) {
     final api = context.read<ApiClient>();
     final border = Theme.of(context).dividerColor;
-    return PageShell(
+    if (_error != null && _project == null) {
+      return PageShell(
+        child: ErrorView(error: _error!, onRetry: _load),
+      );
+    }
+    if (_project == null) {
+      return const PageShell(child: Loading());
+    }
+    return ProjectScaffold(
+      project: _project!,
+      selected: ProjectTab.tags,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_project != null)
-            ProjectHeader(project: _project!, selected: ProjectTab.tags),
-          const Text('Tags',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const Text(
+            'Tags',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 10),
           if (_loading)
             const Loading()
@@ -82,9 +93,10 @@ class _TagsPageState extends State<TagsPage> {
                     ListTile(
                       dense: true,
                       leading: const Icon(Icons.sell_outlined, size: 18),
-                      title: Text(_tags[i].name,
-                          style:
-                              const TextStyle(fontWeight: FontWeight.w600)),
+                      title: Text(
+                        _tags[i].name,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

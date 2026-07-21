@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
 import '../widgets/markdown_view.dart';
+import '../widgets/project_scaffold.dart';
 import '../widgets/project_tabs.dart';
 import '../widgets/top_nav.dart';
 import 'tree_page.dart' show PathBreadcrumbs;
@@ -65,8 +66,11 @@ class _BlobPageState extends State<BlobPage> {
     final api = context.read<ApiClient>();
     try {
       _project ??= await api.getProject(_fullPath);
-      final blob = await api.blob(_fullPath,
-          ref: widget.gitRef, path: widget.path);
+      final blob = await api.blob(
+        _fullPath,
+        ref: widget.gitRef,
+        path: widget.path,
+      );
       if (mounted) setState(() => _blob = blob);
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -78,12 +82,21 @@ class _BlobPageState extends State<BlobPage> {
   @override
   Widget build(BuildContext context) {
     final api = context.read<ApiClient>();
-    return PageShell(
+    if (_error != null && _project == null) {
+      return PageShell(
+        child: ErrorView(error: _error!, onRetry: _load),
+      );
+    }
+    if (_project == null) {
+      return const PageShell(child: Loading());
+    }
+    return ProjectScaffold(
+      project: _project!,
+      selected: ProjectTab.code,
+      archiveRef: widget.gitRef,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_project != null)
-            ProjectHeader(project: _project!, selected: ProjectTab.code),
           Row(
             children: [
               Expanded(

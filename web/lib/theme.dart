@@ -49,12 +49,50 @@ class RgitTheme {
       surfaceContainerHighest: subtle,
       outline: border,
     );
+    final defaultTextTheme =
+        ThemeData(
+          useMaterial3: true,
+          brightness: brightness,
+          colorScheme: scheme,
+        ).textTheme.apply(
+          fontFamily: 'Roboto',
+          bodyColor: text,
+          displayColor: text,
+        );
+    final textTheme = defaultTextTheme.copyWith(
+      bodyLarge: defaultTextTheme.bodyLarge?.copyWith(
+        fontSize: 16,
+        height: 1.5,
+      ),
+      bodyMedium: defaultTextTheme.bodyMedium?.copyWith(
+        fontSize: 14,
+        height: 1.5,
+      ),
+      bodySmall: defaultTextTheme.bodySmall?.copyWith(
+        fontSize: 12,
+        height: 1.5,
+      ),
+      labelLarge: defaultTextTheme.labelLarge?.copyWith(
+        fontSize: 14,
+        height: 1.35,
+      ),
+      labelMedium: defaultTextTheme.labelMedium?.copyWith(
+        fontSize: 13,
+        height: 1.35,
+      ),
+      titleSmall: defaultTextTheme.titleSmall?.copyWith(
+        fontSize: 14,
+        height: 1.35,
+        fontWeight: FontWeight.w600,
+      ),
+    );
     return ThemeData(
       useMaterial3: true,
       fontFamily: 'Roboto',
       fontFamilyFallback: const ['Droid Sans Fallback'],
       brightness: brightness,
       colorScheme: scheme,
+      textTheme: textTheme,
       scaffoldBackgroundColor: background,
       dividerColor: border,
       appBarTheme: AppBarTheme(

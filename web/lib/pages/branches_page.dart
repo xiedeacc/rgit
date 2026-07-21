@@ -7,6 +7,7 @@ import '../api/models.dart' as models;
 import '../theme.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
+import '../widgets/project_scaffold.dart';
 import '../widgets/project_tabs.dart';
 import '../widgets/top_nav.dart';
 
@@ -56,14 +57,24 @@ class _BranchesPageState extends State<BranchesPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final border = theme.dividerColor;
-    return PageShell(
+    if (_error != null && _project == null) {
+      return PageShell(
+        child: ErrorView(error: _error!, onRetry: _load),
+      );
+    }
+    if (_project == null) {
+      return const PageShell(child: Loading());
+    }
+    return ProjectScaffold(
+      project: _project!,
+      selected: ProjectTab.branches,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_project != null)
-            ProjectHeader(project: _project!, selected: ProjectTab.branches),
-          const Text('Branches',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const Text(
+            'Branches',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 10),
           if (_loading)
             const Loading()
@@ -84,21 +95,25 @@ class _BranchesPageState extends State<BranchesPage> {
                       leading: const Icon(Icons.call_split, size: 18),
                       title: Row(
                         children: [
-                          Text(_branches[i].name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600)),
-                          if (_branches[i].name ==
-                              _project?.defaultBranch) ...[
+                          Text(
+                            _branches[i].name,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          if (_branches[i].name == _project?.defaultBranch) ...[
                             const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 1),
+                                horizontal: 6,
+                                vertical: 1,
+                              ),
                               decoration: BoxDecoration(
                                 border: Border.all(color: border),
                                 borderRadius: BorderRadius.circular(999),
                               ),
-                              child: const Text('default',
-                                  style: TextStyle(fontSize: 11)),
+                              child: const Text(
+                                'default',
+                                style: TextStyle(fontSize: 11),
+                              ),
                             ),
                           ],
                         ],
@@ -107,10 +122,11 @@ class _BranchesPageState extends State<BranchesPage> {
                           ? null
                           : Text(
                               _branches[i].sha!.substring(
-                                  0,
-                                  _branches[i].sha!.length > 8
-                                      ? 8
-                                      : _branches[i].sha!.length),
+                                0,
+                                _branches[i].sha!.length > 8
+                                    ? 8
+                                    : _branches[i].sha!.length,
+                              ),
                               style: RgitTheme.mono.copyWith(fontSize: 11),
                             ),
                       trailing: Row(
@@ -118,18 +134,20 @@ class _BranchesPageState extends State<BranchesPage> {
                         children: [
                           TextButton(
                             onPressed: () => context.go(
-                                '/$_fullPath/commits/${_branches[i].name}'),
+                              '/$_fullPath/commits/${_branches[i].name}',
+                            ),
                             child: const Text('Commits'),
                           ),
                           const SizedBox(width: 4),
                           Tooltip(
                             message: context
                                 .read<ApiClient>()
-                                .archiveUrl(_fullPath,
-                                    ref: _branches[i].name)
+                                .archiveUrl(_fullPath, ref: _branches[i].name)
                                 .toString(),
-                            child: const Icon(Icons.download_outlined,
-                                size: 18),
+                            child: const Icon(
+                              Icons.download_outlined,
+                              size: 18,
+                            ),
                           ),
                         ],
                       ),

@@ -6,6 +6,7 @@ import '../api/client.dart';
 import '../api/models.dart' as models;
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
+import '../widgets/project_scaffold.dart';
 import '../widgets/project_tabs.dart';
 import '../widgets/top_nav.dart';
 
@@ -76,8 +77,9 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
   }
 
   void _snack(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _run(Future<void> Function() action, String success) async {
@@ -90,16 +92,17 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
   }
 
   Future<void> _saveGeneral() => _run(() async {
-        final updated =
-            await context.read<ApiClient>().updateProject(_project!.id, {
+    final updated = await context
+        .read<ApiClient>()
+        .updateProject(_project!.id, {
           'name': _name.text,
           'description': _description.text,
           'visibility': _visibility,
           if (_defaultBranch.text.isNotEmpty)
             'default_branch': _defaultBranch.text,
         });
-        if (mounted) setState(() => _project = updated);
-      }, 'Settings saved.');
+    if (mounted) setState(() => _project = updated);
+  }, 'Settings saved.');
 
   Future<void> _addMember() async {
     final userId = TextEditingController();
@@ -120,8 +123,7 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
               const SizedBox(height: 10),
               DropdownButtonFormField<int>(
                 initialValue: level,
-                decoration:
-                    const InputDecoration(labelText: 'Access level'),
+                decoration: const InputDecoration(labelText: 'Access level'),
                 items: [
                   for (final e in models.AccessLevel.labels.entries)
                     DropdownMenuItem(value: e.key, child: Text(e.value)),
@@ -132,11 +134,13 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Add')),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Add'),
+            ),
           ],
         ),
       ),
@@ -147,9 +151,11 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
         _snack('Enter a numeric user ID.');
       } else {
         await _run(() async {
-          await context
-              .read<ApiClient>()
-              .addProjectMember(_project!.id, userId: id, accessLevel: level);
+          await context.read<ApiClient>().addProjectMember(
+            _project!.id,
+            userId: id,
+            accessLevel: level,
+          );
           await _load();
         }, 'Member added.');
       }
@@ -165,11 +171,13 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
           content: Text(body),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Confirm')),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Confirm'),
+            ),
           ],
         ),
       ) ==
@@ -181,16 +189,18 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
       return const PageShell(child: Loading());
     }
     if (_error != null) {
-      return PageShell(child: ErrorView(error: _error!, onRetry: _load));
+      return PageShell(
+        child: ErrorView(error: _error!, onRetry: _load),
+      );
     }
     final project = _project!;
     final api = context.read<ApiClient>();
-    return PageShell(
+    return ProjectScaffold(
+      project: project,
+      selected: ProjectTab.settings,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ProjectHeader(project: project, selected: ProjectTab.settings),
-
           // --- General -----------------------------------------------------
           _Section(
             title: 'General',
@@ -199,44 +209,46 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
               children: [
                 TextField(
                   controller: _name,
-                  decoration:
-                      const InputDecoration(labelText: 'Project name'),
+                  decoration: const InputDecoration(labelText: 'Project name'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: _description,
-                  decoration:
-                      const InputDecoration(labelText: 'Description'),
+                  decoration: const InputDecoration(labelText: 'Description'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: _defaultBranch,
-                  decoration:
-                      const InputDecoration(labelText: 'Default branch'),
+                  decoration: const InputDecoration(
+                    labelText: 'Default branch',
+                  ),
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<int>(
                   initialValue: _visibility,
-                  decoration:
-                      const InputDecoration(labelText: 'Visibility'),
+                  decoration: const InputDecoration(labelText: 'Visibility'),
                   items: const [
                     DropdownMenuItem(
-                        value: models.Visibility.private,
-                        child: Text('Private')),
+                      value: models.Visibility.private,
+                      child: Text('Private'),
+                    ),
                     DropdownMenuItem(
-                        value: models.Visibility.internal,
-                        child: Text('Internal')),
+                      value: models.Visibility.internal,
+                      child: Text('Internal'),
+                    ),
                     DropdownMenuItem(
-                        value: models.Visibility.public,
-                        child: Text('Public')),
+                      value: models.Visibility.public,
+                      child: Text('Public'),
+                    ),
                   ],
                   onChanged: (v) =>
                       setState(() => _visibility = v ?? _visibility),
                 ),
                 const SizedBox(height: 12),
                 FilledButton(
-                    onPressed: _saveGeneral,
-                    child: const Text('Save changes')),
+                  onPressed: _saveGeneral,
+                  child: const Text('Save changes'),
+                ),
               ],
             ),
           ),
@@ -256,17 +268,17 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
                     dense: true,
                     leading: const Icon(Icons.person_outline),
                     title: Text(m.username ?? 'User #${m.userId}'),
-                    subtitle:
-                        Text(models.AccessLevel.label(m.accessLevel)),
+                    subtitle: Text(models.AccessLevel.label(m.accessLevel)),
                     trailing: IconButton(
                       tooltip: 'Remove member',
                       icon: const Icon(Icons.delete_outline, size: 18),
                       onPressed: () async {
-                        if (await _confirm('Remove member',
-                            'Remove this member from the project?')) {
+                        if (await _confirm(
+                          'Remove member',
+                          'Remove this member from the project?',
+                        )) {
                           await _run(() async {
-                            await api.removeProjectMember(
-                                project.id, m.userId);
+                            await api.removeProjectMember(project.id, m.userId);
                             await _load();
                           }, 'Member removed.');
                         }
@@ -295,12 +307,13 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
                   subtitle: project.archived
                       ? 'Restore write access to this project.'
                       : 'Mark read-only; pushes and settings changes are '
-                          'rejected.',
+                            'rejected.',
                   buttonLabel: project.archived ? 'Unarchive' : 'Archive',
                   onPressed: () async {
                     if (await _confirm(
-                        project.archived ? 'Unarchive' : 'Archive',
-                        'Are you sure?')) {
+                      project.archived ? 'Unarchive' : 'Archive',
+                      'Are you sure?',
+                    )) {
                       await _run(() async {
                         final updated = project.archived
                             ? await api.unarchiveProject(project.id)
@@ -324,26 +337,30 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
                         content: TextField(
                           controller: nsId,
                           decoration: const InputDecoration(
-                              labelText: 'Target namespace ID'),
+                            labelText: 'Target namespace ID',
+                          ),
                           keyboardType: TextInputType.number,
                         ),
                         actions: [
                           TextButton(
-                              onPressed: () =>
-                                  Navigator.pop(dialogContext, false),
-                              child: const Text('Cancel')),
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, false),
+                            child: const Text('Cancel'),
+                          ),
                           FilledButton(
-                              onPressed: () =>
-                                  Navigator.pop(dialogContext, true),
-                              child: const Text('Transfer')),
+                            onPressed: () => Navigator.pop(dialogContext, true),
+                            child: const Text('Transfer'),
+                          ),
                         ],
                       ),
                     );
                     final id = int.tryParse(nsId.text);
                     if (ok == true && id != null && mounted) {
                       await _run(() async {
-                        final updated =
-                            await api.transferProject(project.id, id);
+                        final updated = await api.transferProject(
+                          project.id,
+                          id,
+                        );
                         if (mounted && context.mounted) {
                           context.go('/${updated.fullPath}/settings');
                         }
@@ -359,8 +376,10 @@ class _ProjectSettingsPageState extends State<ProjectSettingsPage> {
                       'Permanently remove this project and its repository.',
                   buttonLabel: 'Delete',
                   onPressed: () async {
-                    if (await _confirm('Delete project',
-                        'This cannot be undone. Delete "${project.fullPath}"?')) {
+                    if (await _confirm(
+                      'Delete project',
+                      'This cannot be undone. Delete "${project.fullPath}"?',
+                    )) {
                       await _run(() async {
                         await api.deleteProject(project.id);
                         if (mounted && context.mounted) context.go('/');
@@ -393,8 +412,7 @@ class _Section extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final border =
-        danger ? theme.colorScheme.error : theme.dividerColor;
+    final border = danger ? theme.colorScheme.error : theme.dividerColor;
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 20),
@@ -407,19 +425,20 @@ class _Section extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceContainerHighest,
               border: Border(bottom: BorderSide(color: border)),
             ),
             child: Row(
               children: [
-                Text(title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: danger ? theme.colorScheme.error : null,
-                    )),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: danger ? theme.colorScheme.error : null,
+                  ),
+                ),
                 const Spacer(),
                 ?action,
               ],
@@ -454,8 +473,7 @@ class _DangerRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
               Text(subtitle, style: theme.textTheme.bodySmall),
             ],
           ),
