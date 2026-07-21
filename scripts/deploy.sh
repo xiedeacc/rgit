@@ -81,23 +81,23 @@ REMOTE
 upload_artifacts() {
     local remote_dir="$1"
     log "step 4/6: uploading release artifacts to NAS"
-    rsync -a \
+    scp \
         "$repo_root/target/release/rgit" \
         "$repo_root/target/release/rgit-shell" \
         "$repo_root/target/release/rgit-migrate" \
         "$REMOTE_HOST:$remote_dir/bin/"
-    rsync -a \
+    scp \
         "$repo_root/scripts/rgit-backup.sh" \
         "$repo_root/scripts/rgit-restore.sh" \
         "$repo_root/scripts/rgit-refresh-ocsp.sh" \
         "$REMOTE_HOST:$remote_dir/scripts/"
-    rsync -a "$repo_root/conf/rgit.example.toml" "$REMOTE_HOST:$remote_dir/conf/"
-    rsync -a \
+    scp "$repo_root/conf/rgit.example.toml" "$REMOTE_HOST:$remote_dir/conf/"
+    scp \
         "$repo_root/scripts/systemd/rgit.service" \
         "$repo_root/scripts/systemd/rgit-backup.service" \
         "$repo_root/scripts/systemd/rgit-backup.timer" \
         "$REMOTE_HOST:$remote_dir/systemd/"
-    rsync -a --delete "$repo_root/web/build/web/" "$REMOTE_HOST:$remote_dir/web/"
+    scp -r "$repo_root/web/build/web/." "$REMOTE_HOST:$remote_dir/web/"
 }
 
 install_remote() {

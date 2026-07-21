@@ -17,7 +17,7 @@
   protocol smoke tests against that deployed instance.
 - Production deployment must be performed only by running
   `/root/src/rust/rgit/scripts/deploy.sh` from the dev checkout. Do not run an
-  ad hoc `ssh`/`rsync`/`install` deployment sequence except when repairing that
+  ad hoc `ssh`/`scp`/`install` deployment sequence except when repairing that
   script itself. The script builds on dev, uploads artifacts and systemd units
   to the NAS, installs them under `/opt/usr/local/rgit`, restarts rgit, and
   verifies the deployed Web bundle.

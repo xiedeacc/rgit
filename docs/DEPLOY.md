@@ -5,7 +5,7 @@
 ## 1. 构建 + 安装
 
 ```bash
-# 在 dev 构建机运行；脚本会通过 ssh/rsync 发布到 NAS
+# 在 dev 构建机运行；脚本会通过 ssh/scp 发布到 NAS
 cd /root/src/rust/rgit
 scripts/deploy.sh
 ```
@@ -15,7 +15,7 @@ scripts/deploy.sh
 - dev 上 release 构建 `rgit` / `rgit-shell` / `rgit-migrate`
 - dev 上 `flutter build web` 并注入当前 commit 信息
 - 在 NAS 创建 `/tmp/rgit-deploy-<rev>` staging 目录
-- 用 `rsync` 上传二进制、Web bundle、辅助脚本、`conf/rgit.example.toml`
+- 用 `scp` 上传二进制、Web bundle、辅助脚本、`conf/rgit.example.toml`
   和 `scripts/systemd/` 下的 systemd unit
 - 在 NAS 安装到 `/opt/usr/local/rgit/{bin,conf,data,logs}`，上传 unit 到
   `/etc/systemd/system`，enable timer，重启 `rgit.service`
