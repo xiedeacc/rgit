@@ -68,7 +68,10 @@ class _RgitAppState extends State<RgitApp> {
       },
       routes: [
         // Fixed top-level routes first so /:ns cannot swallow them.
-        GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+        GoRoute(
+          path: '/login',
+          pageBuilder: (context, state) => _plainPage(state, const LoginPage()),
+        ),
         GoRoute(
           path: '/',
           pageBuilder: (context, state) => _plainPage(
@@ -78,45 +81,54 @@ class _RgitAppState extends State<RgitApp> {
         ),
         GoRoute(
           path: '/settings/profile',
-          builder: (context, state) => const SettingsProfilePage(),
+          pageBuilder: (context, state) =>
+              _plainPage(state, const SettingsProfilePage()),
         ),
         GoRoute(
           path: '/settings/keys',
-          builder: (context, state) => const SettingsKeysPage(),
+          pageBuilder: (context, state) =>
+              _plainPage(state, const SettingsKeysPage()),
         ),
         GoRoute(
           path: '/settings/tokens',
-          builder: (context, state) => const SettingsTokensPage(),
+          pageBuilder: (context, state) =>
+              _plainPage(state, const SettingsTokensPage()),
         ),
         GoRoute(
           path: '/admin',
-          builder: (context, state) => const AdminDashboardPage(),
+          pageBuilder: (context, state) =>
+              _plainPage(state, const AdminDashboardPage()),
           routes: [
             GoRoute(
               path: 'users',
-              builder: (context, state) => const AdminUsersPage(),
+              pageBuilder: (context, state) =>
+                  _plainPage(state, const AdminUsersPage()),
             ),
             GoRoute(
               path: 'projects',
-              builder: (context, state) => const AdminProjectsPage(),
+              pageBuilder: (context, state) =>
+                  _plainPage(state, const AdminProjectsPage()),
             ),
           ],
         ),
         GoRoute(
           path: '/groups/new',
-          builder: (context, state) => const GroupNewPage(),
+          pageBuilder: (context, state) =>
+              _plainPage(state, const GroupNewPage()),
         ),
 
         // Namespace home + group settings.
         GoRoute(
           path: '/:ns',
-          builder: (context, state) =>
-              NamespacePage(ns: state.pathParameters['ns']!),
+          pageBuilder: (context, state) =>
+              _plainPage(state, NamespacePage(ns: state.pathParameters['ns']!)),
           routes: [
             GoRoute(
               path: 'settings',
-              builder: (context, state) =>
-                  GroupSettingsPage(ns: state.pathParameters['ns']!),
+              pageBuilder: (context, state) => _plainPage(
+                state,
+                GroupSettingsPage(ns: state.pathParameters['ns']!),
+              ),
             ),
           ],
         ),

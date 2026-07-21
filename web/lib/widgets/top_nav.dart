@@ -57,6 +57,8 @@ class TopNav extends StatefulWidget implements PreferredSizeWidget {
 class _TopNavState extends State<TopNav> {
   Timer? _uptimeTimer;
   int? _uptimeSeconds;
+  OverlayEntry? _createMenu;
+  OverlayEntry? _accountMenu;
 
   @override
   void initState() {
@@ -66,8 +68,125 @@ class _TopNavState extends State<TopNav> {
 
   @override
   void dispose() {
+    _hideCreateMenu();
+    _hideAccountMenu();
     _uptimeTimer?.cancel();
     super.dispose();
+  }
+
+  void _hideCreateMenu() {
+    _createMenu?.remove();
+    _createMenu = null;
+  }
+
+  void _hideAccountMenu() {
+    _accountMenu?.remove();
+    _accountMenu = null;
+  }
+
+  void _toggleCreateMenu({required BuildContext anchorContext}) {
+    if (_createMenu != null) {
+      _hideCreateMenu();
+      return;
+    }
+    _hideAccountMenu();
+    final overlay = Overlay.of(context);
+    final renderBox = anchorContext.findRenderObject() as RenderBox;
+    final anchor = renderBox.localToGlobal(Offset.zero);
+    final size = renderBox.size;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    const menuWidth = 180.0;
+    final left = (anchor.dx + size.width - menuWidth).clamp(
+      8.0,
+      screenWidth - menuWidth - 8,
+    );
+    final top = anchor.dy + size.height + 8;
+
+    _createMenu = OverlayEntry(
+      builder: (overlayContext) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _hideCreateMenu,
+              child: const SizedBox.expand(),
+            ),
+          ),
+          Positioned(
+            left: left,
+            top: top,
+            width: menuWidth,
+            child: _CreateMenuPanel(
+              onSelected: (route) {
+                _hideCreateMenu();
+                if (route == 'new-project') {
+                  showNewProjectDialog(context);
+                } else {
+                  context.go(route);
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+    overlay.insert(_createMenu!);
+  }
+
+  void _toggleAccountMenu({
+    required BuildContext anchorContext,
+    required SessionState session,
+  }) {
+    if (_accountMenu != null) {
+      _hideAccountMenu();
+      return;
+    }
+    _hideCreateMenu();
+    final user = session.user;
+    final overlay = Overlay.of(context);
+    final renderBox = anchorContext.findRenderObject() as RenderBox;
+    final anchor = renderBox.localToGlobal(Offset.zero);
+    final size = renderBox.size;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    const menuWidth = 276.0;
+    final left = (anchor.dx + size.width - menuWidth).clamp(
+      8.0,
+      screenWidth - menuWidth - 8,
+    );
+    final top = anchor.dy + size.height + 8;
+
+    _accountMenu = OverlayEntry(
+      builder: (overlayContext) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _hideAccountMenu,
+              child: const SizedBox.expand(),
+            ),
+          ),
+          Positioned(
+            left: left,
+            top: top,
+            width: menuWidth,
+            child: _AccountMenuPanel(
+              username: user?.username ?? '',
+              isAdmin: user?.isAdmin ?? false,
+              onSelected: (route) async {
+                _hideAccountMenu();
+                if (route == 'signout') {
+                  await session.logout();
+                  if (mounted) context.go('/login');
+                } else if (mounted) {
+                  context.go(route);
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+    overlay.insert(_accountMenu!);
   }
 
   Future<void> _loadUptime() async {
@@ -181,100 +300,49 @@ class _TopNavState extends State<TopNav> {
             ),
           ),
         if (user != null)
-          PopupMenuButton<String>(
-            tooltip: 'Create new',
-            icon: const Icon(Icons.add),
-            onSelected: (v) {
-              if (v == 'new-project') {
-                showNewProjectDialog(context);
-              } else {
-                context.go(v);
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'new-project', child: Text('New project')),
-              PopupMenuItem(value: '/groups/new', child: Text('New group')),
-            ],
-          ),
-        if (user != null)
-          PopupMenuButton<String>(
-            tooltip: user.username,
-            position: PopupMenuPosition.under,
-            offset: const Offset(0, 8),
-            color: Theme.of(context).colorScheme.surface,
-            surfaceTintColor: Colors.transparent,
-            elevation: 12,
-            shadowColor: Colors.black.withValues(alpha: 0.18),
-            constraints: const BoxConstraints.tightFor(width: 300),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Theme.of(context).dividerColor),
-            ),
-            icon: CircleAvatar(
-              radius: 14,
-              child: Text(
-                user.username.isNotEmpty ? user.username[0].toUpperCase() : '?',
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-            onSelected: (v) async {
-              if (v == 'signout') {
-                await session.logout();
-                if (context.mounted) context.go('/login');
-              } else {
-                context.go(v);
-              }
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem<String>(
-                enabled: false,
-                padding: EdgeInsets.zero,
-                height: 78,
-                child: _AccountMenuHeader(username: user.username),
-              ),
-              const PopupMenuDivider(height: 1),
-              const PopupMenuItem<String>(
-                value: '/settings/profile',
-                padding: EdgeInsets.zero,
-                child: _AccountMenuTile(
-                  icon: Icons.settings_outlined,
-                  label: 'Settings',
-                ),
-              ),
-              const PopupMenuItem<String>(
-                value: '/settings/keys',
-                padding: EdgeInsets.zero,
-                child: _AccountMenuTile(
-                  icon: Icons.key_outlined,
-                  label: 'SSH keys',
-                ),
-              ),
-              const PopupMenuItem<String>(
-                value: '/settings/tokens',
-                padding: EdgeInsets.zero,
-                child: _AccountMenuTile(
-                  icon: Icons.token_outlined,
-                  label: 'Access tokens',
-                ),
-              ),
-              if (user.isAdmin) ...const [
-                PopupMenuDivider(height: 1),
-                PopupMenuItem<String>(
-                  value: '/admin',
-                  padding: EdgeInsets.zero,
-                  child: _AccountMenuTile(
-                    icon: Icons.admin_panel_settings_outlined,
-                    label: 'Admin area',
+          Builder(
+            builder: (anchorContext) => Tooltip(
+              message: 'Create new',
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _toggleCreateMenu(anchorContext: anchorContext),
+                  child: const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Icon(Icons.add),
                   ),
                 ),
-              ],
-              const PopupMenuDivider(height: 1),
-              const PopupMenuItem<String>(
-                value: 'signout',
-                padding: EdgeInsets.zero,
-                child: _AccountMenuTile(icon: Icons.logout, label: 'Sign out'),
               ),
-            ],
+            ),
+          ),
+        if (user != null)
+          Builder(
+            builder: (anchorContext) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Tooltip(
+                message: user.username,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _toggleAccountMenu(
+                      anchorContext: anchorContext,
+                      session: session,
+                    ),
+                    child: CircleAvatar(
+                      radius: 14,
+                      child: Text(
+                        user.username.isNotEmpty
+                            ? user.username[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           )
         else
           Padding(
@@ -290,68 +358,197 @@ class _TopNavState extends State<TopNav> {
   }
 }
 
-class _AccountMenuHeader extends StatelessWidget {
-  const _AccountMenuHeader({required this.username});
+class _CreateMenuPanel extends StatelessWidget {
+  const _CreateMenuPanel({required this.onSelected});
 
-  final String username;
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 24,
-            child: Text(
-              username.isNotEmpty ? username[0].toUpperCase() : '?',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+    final border = theme.dividerColor;
+    return Material(
+      color: Colors.transparent,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border.all(color: border),
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
             ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _AccountMenuTile(
+                icon: Icons.add_box_outlined,
+                label: 'New project',
+                onTap: () => onSelected('new-project'),
+              ),
+              Divider(height: 1, color: border),
+              _AccountMenuTile(
+                icon: Icons.group_add_outlined,
+                label: 'New group',
+                onTap: () => onSelected('/groups/new'),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              username,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountMenuPanel extends StatelessWidget {
+  const _AccountMenuPanel({
+    required this.username,
+    required this.isAdmin,
+    required this.onSelected,
+  });
+
+  final String username;
+  final bool isAdmin;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final border = theme.dividerColor;
+    return Material(
+      color: Colors.transparent,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border.all(color: border),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.10),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
             ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      child: Text(
+                        username.isNotEmpty ? username[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        username,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.swap_horiz,
+                      size: 18,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+              Divider(height: 1, color: border),
+              _AccountMenuTile(
+                icon: Icons.settings_outlined,
+                label: 'Settings',
+                onTap: () => onSelected('/settings/profile'),
+              ),
+              _AccountMenuTile(
+                icon: Icons.key_outlined,
+                label: 'SSH keys',
+                onTap: () => onSelected('/settings/keys'),
+              ),
+              _AccountMenuTile(
+                icon: Icons.token_outlined,
+                label: 'Access tokens',
+                onTap: () => onSelected('/settings/tokens'),
+              ),
+              if (isAdmin) ...[
+                Divider(height: 1, color: border),
+                _AccountMenuTile(
+                  icon: Icons.admin_panel_settings_outlined,
+                  label: 'Admin area',
+                  onTap: () => onSelected('/admin'),
+                ),
+              ],
+              Divider(height: 1, color: border),
+              _AccountMenuTile(
+                icon: Icons.logout,
+                label: 'Sign out',
+                onTap: () => onSelected('signout'),
+              ),
+            ],
           ),
-          Icon(
-            Icons.swap_horiz,
-            size: 22,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
 class _AccountMenuTile extends StatelessWidget {
-  const _AccountMenuTile({required this.icon, required this.label});
+  const _AccountMenuTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SizedBox(
-      height: 48,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          children: [
-            Icon(icon, size: 22, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(fontSize: 16, height: 1.25),
-              ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          height: 40,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: const TextStyle(fontSize: 14, height: 1.2),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

@@ -168,39 +168,44 @@ class _AccountNavTile extends StatelessWidget {
     final fg = selected
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurface;
-    return InkWell(
-      borderRadius: BorderRadius.circular(6),
-      onTap: () => context.go(item.route),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        decoration: BoxDecoration(
-          color: selected
-              ? theme.colorScheme.primary.withValues(alpha: 0.08)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: Border(
-            left: BorderSide(
-              width: 3,
-              color: selected ? theme.colorScheme.primary : Colors.transparent,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(item.icon, size: 20, color: fg),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                item.label,
-                style: TextStyle(
-                  color: fg,
-                  fontSize: 14,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => context.go(item.route),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: selected
+                ? theme.colorScheme.primary.withValues(alpha: 0.08)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            border: Border(
+              left: BorderSide(
+                width: 3,
+                color: selected
+                    ? theme.colorScheme.primary
+                    : Colors.transparent,
               ),
             ),
-          ],
+          ),
+          child: Row(
+            children: [
+              Icon(item.icon, size: 20, color: fg),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  item.label,
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 14,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -212,20 +217,23 @@ class _AccountSignOutTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(6),
-      onTap: () async {
-        await context.read<SessionState>().logout();
-        if (context.mounted) context.go('/login');
-      },
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        child: Row(
-          children: [
-            Icon(Icons.logout, size: 20),
-            SizedBox(width: 10),
-            Text('Sign out', style: TextStyle(fontSize: 14)),
-          ],
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () async {
+          await context.read<SessionState>().logout();
+          if (context.mounted) context.go('/login');
+        },
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          child: Row(
+            children: [
+              Icon(Icons.logout, size: 20),
+              SizedBox(width: 10),
+              Text('Sign out', style: TextStyle(fontSize: 14)),
+            ],
+          ),
         ),
       ),
     );
