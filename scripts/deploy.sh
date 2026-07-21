@@ -170,9 +170,17 @@ verify_remote() {
     log "step 6/6: verifying deployed service and Web bundle"
     local bundle
     bundle="$(mktemp)"
-    trap 'rm -f "$bundle"' RETURN
-    curl -sk -H 'Cache-Control: no-cache' "$VERIFY_URL/main.dart.js?rev=$rev" -o "$bundle"
-    grep -q "$rev" "$bundle" || die "deployed Web bundle does not contain $rev"
+    local found=0
+    for _ in $(seq 1 20); do
+        curl -sk -H 'Cache-Control: no-cache' "$VERIFY_URL/main.dart.js?rev=$rev" -o "$bundle"
+        if grep -q "$rev" "$bundle"; then
+            found=1
+            break
+        fi
+        sleep 1
+    done
+    rm -f "$bundle"
+    [ "$found" = "1" ] || die "deployed Web bundle does not contain $rev"
     ssh "$REMOTE_HOST" bash -s <<'REMOTE'
 set -euo pipefail
 test "$(systemctl is-active rgit.service)" = "active"
