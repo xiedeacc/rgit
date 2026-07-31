@@ -172,8 +172,8 @@ verify_remote() {
     bundle="$(mktemp)"
     local found=0
     for _ in $(seq 1 20); do
-        curl -sk -H 'Cache-Control: no-cache' "$VERIFY_URL/main.dart.js?rev=$rev" -o "$bundle"
-        if grep -q "$rev" "$bundle"; then
+        if curl --noproxy '*' -fsk -H 'Cache-Control: no-cache' "$VERIFY_URL/main.dart.js?rev=$rev" -o "$bundle" &&
+            grep -q "$rev" "$bundle"; then
             found=1
             break
         fi
