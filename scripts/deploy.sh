@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build rgit on the dev machine, upload release artifacts to the NAS, install
-# them into /opt/usr/local/rgit, upload systemd units, restart, and verify.
+# them into /opt/usr/local/rgit, restart existing systemd units, and verify.
 set -euo pipefail
 
 REMOTE_HOST="${RGIT_DEPLOY_HOST:-nas}"
@@ -34,7 +34,7 @@ build_time() {
 
 require_default_dest() {
     if [ "$DEST_DIR" != "/opt/usr/local/rgit" ]; then
-        die "RGIT_DEST_DIR=$DEST_DIR is unsupported because scripts/systemd units are copied verbatim from NAS and point to /opt/usr/local/rgit"
+        die "RGIT_DEST_DIR=$DEST_DIR is unsupported because the NAS systemd units are expected to point to /opt/usr/local/rgit"
     fi
 }
 
@@ -62,9 +62,6 @@ check_artifacts() {
     test -x "$repo_root/target/release/rgit-migrate" || die "missing target/release/rgit-migrate"
     test -f "$repo_root/web/build/web/index.html" || die "missing web/build/web/index.html"
     test -f "$repo_root/conf/rgit.example.toml" || die "missing conf/rgit.example.toml"
-    test -f "$repo_root/scripts/systemd/rgit.service" || die "missing scripts/systemd/rgit.service"
-    test -f "$repo_root/scripts/systemd/rgit-backup.service" || die "missing scripts/systemd/rgit-backup.service"
-    test -f "$repo_root/scripts/systemd/rgit-backup.timer" || die "missing scripts/systemd/rgit-backup.timer"
 }
 
 prepare_remote() {
@@ -74,7 +71,7 @@ prepare_remote() {
 set -euo pipefail
 remote_dir="$1"
 rm -rf "$remote_dir"
-mkdir -p "$remote_dir/bin" "$remote_dir/scripts" "$remote_dir/web" "$remote_dir/conf" "$remote_dir/systemd"
+mkdir -p "$remote_dir/bin" "$remote_dir/scripts" "$remote_dir/web" "$remote_dir/conf"
 REMOTE
 }
 
@@ -92,17 +89,12 @@ upload_artifacts() {
         "$repo_root/scripts/rgit-refresh-ocsp.sh" \
         "$REMOTE_HOST:$remote_dir/scripts/"
     scp "$repo_root/conf/rgit.example.toml" "$REMOTE_HOST:$remote_dir/conf/"
-    scp \
-        "$repo_root/scripts/systemd/rgit.service" \
-        "$repo_root/scripts/systemd/rgit-backup.service" \
-        "$repo_root/scripts/systemd/rgit-backup.timer" \
-        "$REMOTE_HOST:$remote_dir/systemd/"
     scp -r "$repo_root/web/build/web/." "$REMOTE_HOST:$remote_dir/web/"
 }
 
 install_remote() {
     local remote_dir="$1"
-    log "step 5/6: installing artifacts and systemd units on NAS"
+    log "step 5/6: installing artifacts and checking existing systemd units on NAS"
     ssh "$REMOTE_HOST" bash -s -- \
         "$remote_dir" "$DEST_DIR" "$SYSTEMD_DIR" "$RUN_USER" \
         "$ENABLE_UNITS" "$RESTART_SERVICE" "$START_BACKUP_TIMER" <<'REMOTE'
@@ -141,10 +133,14 @@ install -d -m 0700 -o "$run_user" -g "$run_user" "$dest/.ssh"
 install -d -m 0700 -o "$run_user" -g "$run_user" "$dest/.backup-worktree"
 chown -R "$run_user":"$run_user" "$dest/data" "$dest/logs" "$dest/conf"
 
-mkdir -p "$systemd_dir"
-install -m 0644 "$src/systemd/rgit.service" "$systemd_dir/rgit.service"
-install -m 0644 "$src/systemd/rgit-backup.service" "$systemd_dir/rgit-backup.service"
-install -m 0644 "$src/systemd/rgit-backup.timer" "$systemd_dir/rgit-backup.timer"
+for unit in rgit.service rgit-backup.service rgit-backup.timer; do
+    if [ ! -f "$systemd_dir/$unit" ]; then
+        echo "[deploy] missing $systemd_dir/$unit" >&2
+        echo "[deploy] install or migrate rgit systemd units once on the NAS before deploying" >&2
+        echo "[deploy] deployment scripts must not generate long-lived systemd units or keep unit templates in the repository" >&2
+        exit 1
+    fi
+done
 
 systemctl daemon-reload
 if [ "$enable_units" = "1" ]; then

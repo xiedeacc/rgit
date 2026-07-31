@@ -16,9 +16,9 @@ scripts/deploy.sh
 - dev 上 `flutter build web` 并注入当前 commit 信息
 - 在 NAS 创建 `/tmp/rgit-deploy-<rev>` staging 目录
 - 用 `scp` 上传二进制、Web bundle、辅助脚本、`conf/rgit.example.toml`
-  和 `scripts/systemd/` 下的 systemd unit
-- 在 NAS 安装到 `/opt/usr/local/rgit/{bin,conf,data,logs}`，上传 unit 到
-  `/etc/systemd/system`，enable timer，重启 `rgit.service`
+- 在 NAS 安装到 `/opt/usr/local/rgit/{bin,conf,data,logs}`，检查目标机已有
+  `/etc/systemd/system/{rgit.service,rgit-backup.service,rgit-backup.timer}`，
+  enable timer，重启 `rgit.service`
 - 验证线上 `main.dart.js` 包含本次 commit，且 `rgit.service` active、
   `gitlab-runsvdir.service` inactive
 
@@ -30,8 +30,8 @@ RGIT_VERIFY_URL=https://rgit.xiedeacc.com \
 scripts/deploy.sh
 ```
 
-发布前可运行 `scripts/test-deploy.sh`，它验收 release 产物和
-`scripts/systemd/` unit 语法，不会连接 NAS，也不会写 `/etc`。
+发布前可运行 `scripts/test-deploy.sh`，它验收 release 产物和部署脚本的
+systemd 迁移检查，不会连接 NAS，也不会写 `/etc`。
 依赖安全检查使用 `scripts/security-audit.sh`；脚本同时验证 SQLx 锁文件中的
 MySQL/RSA 可选依赖不在任何工作区目标的依赖图中。
 
