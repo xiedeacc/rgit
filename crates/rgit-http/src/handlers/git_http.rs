@@ -282,6 +282,12 @@ async fn service_rpc(
             tracing::error!(error = %e, "failed to configure receive-pack");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
+        if let Err(e) =
+            rgit_git::repo::allow_current_branch_deletion(&state.config.git, &repo).await
+        {
+            tracing::error!(error = %e, "failed to allow current branch deletion");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     }
     let git_protocol = header_str(&headers, "Git-Protocol");
     let gzipped = header_str(&headers, "content-encoding").as_deref() == Some("gzip");

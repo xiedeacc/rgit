@@ -148,6 +148,22 @@ pub async fn allow_shallow_updates(cfg: &GitConfig, repo: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Permit receive-pack to delete the branch currently pointed to by HEAD.
+///
+/// Git refuses this by default for bare repositories because clones would have
+/// no checkout target. rgit refreshes HEAD after successful pushes, so allowing
+/// the deletion lets users remove their old default branch and automatically
+/// land on another branch.
+pub async fn allow_current_branch_deletion(cfg: &GitConfig, repo: &Path) -> Result<()> {
+    run_git(
+        cfg,
+        &["config", "receive.denyDeleteCurrent", "ignore"],
+        Some(repo),
+    )
+    .await?;
+    Ok(())
+}
+
 /// Fork: bare local clone. `--local` hardlinks objects on the same
 /// filesystem, so forks are near-free on disk.
 pub async fn fork_local(cfg: &GitConfig, src: &Path, dst: &Path) -> Result<()> {
@@ -202,13 +218,14 @@ pub async fn refresh_head_branch_after_push(
     cfg: &GitConfig,
     repo: &Path,
 ) -> Result<Option<String>> {
-    if let Some(head) = head_branch(cfg, repo).await? {
-        if branch_exists(cfg, repo, &head).await? {
-            return Ok(Some(head));
+    let head = head_branch(cfg, repo).await?;
+    if let Some(head) = head.as_deref() {
+        if branch_exists(cfg, repo, head).await? {
+            return Ok(Some(head.to_string()));
         }
     }
 
-    let Some(branch) = first_branch(cfg, repo).await? else {
+    let Some(branch) = fallback_branch(cfg, repo, head.as_deref()).await? else {
         return Ok(None);
     };
     set_head_branch(cfg, repo, &branch).await?;
@@ -241,7 +258,23 @@ async fn branch_exists(cfg: &GitConfig, repo: &Path, branch: &str) -> Result<boo
     }
 }
 
-async fn first_branch(cfg: &GitConfig, repo: &Path) -> Result<Option<String>> {
+async fn fallback_branch(
+    cfg: &GitConfig,
+    repo: &Path,
+    current: Option<&str>,
+) -> Result<Option<String>> {
+    for branch in ["master", "main"] {
+        if current != Some(branch) && branch_exists(cfg, repo, branch).await? {
+            return Ok(Some(branch.to_string()));
+        }
+    }
+    Ok(branches_by_recent_commit(cfg, repo)
+        .await?
+        .into_iter()
+        .find(|branch| Some(branch.as_str()) != current))
+}
+
+async fn branches_by_recent_commit(cfg: &GitConfig, repo: &Path) -> Result<Vec<String>> {
     let out = run_git(
         cfg,
         &[
@@ -255,6 +288,242 @@ async fn first_branch(cfg: &GitConfig, repo: &Path) -> Result<Option<String>> {
     .await?;
     Ok(String::from_utf8_lossy(&out)
         .lines()
-        .find(|line| !line.trim().is_empty())
-        .map(|line| line.trim().to_string()))
+        .filter_map(|line| {
+            let branch = line.trim();
+            (!branch.is_empty()).then(|| branch.to_string())
+        })
+        .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command as StdCommand;
+
+    fn temp_root(name: &str) -> PathBuf {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!("rgit-repo-{name}-{nonce}"))
+    }
+
+    fn git(cwd: Option<&Path>, args: &[&str]) {
+        let mut command = StdCommand::new("git");
+        command
+            .args(args)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_AUTHOR_NAME", "Rgit Test")
+            .env("GIT_AUTHOR_EMAIL", "rgit@example.test")
+            .env("GIT_COMMITTER_NAME", "Rgit Test")
+            .env("GIT_COMMITTER_EMAIL", "rgit@example.test");
+        if let Some(cwd) = cwd {
+            command.current_dir(cwd);
+        }
+        let output = command.output().expect("run git");
+        assert!(
+            output.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn commit_file(work: &Path, name: &str, contents: &str, message: &str, date: &str) {
+        std::fs::write(work.join(name), contents).expect("write test file");
+        git(Some(work), &["add", name]);
+        let output = StdCommand::new("git")
+            .args(["commit", "-m", message])
+            .current_dir(work)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_AUTHOR_NAME", "Rgit Test")
+            .env("GIT_AUTHOR_EMAIL", "rgit@example.test")
+            .env("GIT_COMMITTER_NAME", "Rgit Test")
+            .env("GIT_COMMITTER_EMAIL", "rgit@example.test")
+            .env("GIT_AUTHOR_DATE", date)
+            .env("GIT_COMMITTER_DATE", date)
+            .output()
+            .expect("run git commit");
+        assert!(
+            output.status.success(),
+            "git commit failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn setup_repo(name: &str, branches: &[(&str, &str)]) -> (PathBuf, PathBuf, PathBuf) {
+        let root = temp_root(name);
+        let bare = root.join("repo.git");
+        let work = root.join("work");
+        std::fs::create_dir_all(&root).expect("create temp root");
+        git(
+            None,
+            &[
+                "init",
+                "--bare",
+                "--initial-branch=feature",
+                bare.to_str().unwrap(),
+            ],
+        );
+        git(
+            None,
+            &["init", "--initial-branch=feature", work.to_str().unwrap()],
+        );
+        commit_file(
+            &work,
+            "feature.txt",
+            "feature\n",
+            "feature",
+            "2024-01-01T00:00:00Z",
+        );
+        for (branch, date) in branches {
+            git(Some(&work), &["checkout", "-B", branch, "feature"]);
+            commit_file(
+                &work,
+                &format!("{branch}.txt"),
+                &format!("{branch}\n"),
+                branch,
+                date,
+            );
+        }
+        git(Some(&work), &["checkout", "feature"]);
+        git(
+            Some(&work),
+            &["remote", "add", "origin", bare.to_str().unwrap()],
+        );
+        let mut push_args = vec!["push", "origin", "feature"];
+        push_args.extend(branches.iter().map(|(branch, _)| *branch));
+        git(Some(&work), &push_args);
+        (root, bare, work)
+    }
+
+    #[tokio::test]
+    async fn deleting_default_branch_refreshes_head_to_master() {
+        let cfg = GitConfig::default();
+        let (root, repo, work) = setup_repo(
+            "prefer-master",
+            &[
+                ("main", "2024-01-02T00:00:00Z"),
+                ("master", "2024-01-03T00:00:00Z"),
+                ("newer", "2024-01-04T00:00:00Z"),
+            ],
+        );
+
+        set_head_branch(&cfg, &repo, "feature")
+            .await
+            .expect("set head");
+        allow_current_branch_deletion(&cfg, &repo)
+            .await
+            .expect("allow current deletion");
+        git(Some(&work), &["push", "origin", "--delete", "feature"]);
+        refresh_head_branch_after_push(&cfg, &repo)
+            .await
+            .expect("refresh head");
+
+        assert_eq!(
+            head_branch(&cfg, &repo)
+                .await
+                .expect("read head")
+                .as_deref(),
+            Some("master")
+        );
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[tokio::test]
+    async fn deleting_default_branch_refreshes_head_to_main_without_master() {
+        let cfg = GitConfig::default();
+        let (root, repo, work) = setup_repo(
+            "prefer-main",
+            &[
+                ("main", "2024-01-02T00:00:00Z"),
+                ("newer", "2024-01-04T00:00:00Z"),
+            ],
+        );
+
+        set_head_branch(&cfg, &repo, "feature")
+            .await
+            .expect("set head");
+        allow_current_branch_deletion(&cfg, &repo)
+            .await
+            .expect("allow current deletion");
+        git(Some(&work), &["push", "origin", "--delete", "feature"]);
+        refresh_head_branch_after_push(&cfg, &repo)
+            .await
+            .expect("refresh head");
+
+        assert_eq!(
+            head_branch(&cfg, &repo)
+                .await
+                .expect("read head")
+                .as_deref(),
+            Some("main")
+        );
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[tokio::test]
+    async fn deleting_default_branch_refreshes_head_to_recent_branch() {
+        let cfg = GitConfig::default();
+        let (root, repo, work) = setup_repo(
+            "prefer-recent",
+            &[
+                ("older", "2024-01-02T00:00:00Z"),
+                ("newer", "2024-01-04T00:00:00Z"),
+            ],
+        );
+
+        set_head_branch(&cfg, &repo, "feature")
+            .await
+            .expect("set head");
+        allow_current_branch_deletion(&cfg, &repo)
+            .await
+            .expect("allow current deletion");
+        git(Some(&work), &["push", "origin", "--delete", "feature"]);
+        refresh_head_branch_after_push(&cfg, &repo)
+            .await
+            .expect("refresh head");
+
+        assert_eq!(
+            head_branch(&cfg, &repo)
+                .await
+                .expect("read head")
+                .as_deref(),
+            Some("newer")
+        );
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[tokio::test]
+    async fn allow_current_branch_deletion_allows_git_to_delete_head_branch() {
+        let cfg = GitConfig::default();
+        let (root, repo, work) = setup_repo(
+            "delete-previous-head",
+            &[("master", "2024-01-02T00:00:00Z")],
+        );
+
+        set_head_branch(&cfg, &repo, "feature")
+            .await
+            .expect("set head");
+        allow_current_branch_deletion(&cfg, &repo)
+            .await
+            .expect("allow current deletion");
+        git(Some(&work), &["push", "origin", "--delete", "feature"]);
+        refresh_head_branch_after_push(&cfg, &repo)
+            .await
+            .expect("refresh head");
+
+        assert_eq!(
+            head_branch(&cfg, &repo)
+                .await
+                .expect("read head")
+                .as_deref(),
+            Some("master")
+        );
+        assert!(!branch_exists(&cfg, &repo, "feature")
+            .await
+            .expect("check feature"));
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
 }

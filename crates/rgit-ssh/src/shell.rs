@@ -213,6 +213,9 @@ pub async fn run(config_path: &Path, key_id: i64, original: &str) -> Result<i32,
                 rgit_git::repo::allow_shallow_updates(&config.git, &repository)
                     .await
                     .map_err(|error| ShellError::Internal(anyhow::Error::from(error)))?;
+                rgit_git::repo::allow_current_branch_deletion(&config.git, &repository)
+                    .await
+                    .map_err(|error| ShellError::Internal(anyhow::Error::from(error)))?;
             }
             let protocol = std::env::var("GIT_PROTOCOL").ok();
             let status = rgit_git::protocol::run_ssh_service_stdio(
