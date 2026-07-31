@@ -192,6 +192,20 @@ class _RgitAppState extends State<RgitApp> {
                   gitRef: state.pathParameters['ref']!,
                 ),
               ),
+              routes: [
+                GoRoute(
+                  path: ':path(.+)',
+                  pageBuilder: (context, state) => _projectPage(
+                    state,
+                    CommitsPage(
+                      ns: state.pathParameters['ns']!,
+                      proj: state.pathParameters['proj']!,
+                      gitRef:
+                          '${state.pathParameters['ref']!}/${_restPath(state)}',
+                    ),
+                  ),
+                ),
+              ],
             ),
             GoRoute(
               path: 'commit/:sha',

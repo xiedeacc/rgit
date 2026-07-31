@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart' as models;
+import '../api/ref_resolution.dart';
 import '../theme.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
@@ -35,11 +36,16 @@ class BlobPage extends StatefulWidget {
 class _BlobPageState extends State<BlobPage> {
   models.Project? _project;
   models.BlobFile? _blob;
+  String? _resolvedRef;
+  String _resolvedPath = '';
   Object? _error;
   bool _loading = true;
 
   String get _fullPath => '${widget.ns}/${widget.proj}';
-  bool get _isMarkdown => widget.path.toLowerCase().endsWith('.md');
+  String get _routeTail =>
+      widget.path.isEmpty ? widget.gitRef : '${widget.gitRef}/${widget.path}';
+  String get _displayPath => _resolvedRef == null ? widget.path : _resolvedPath;
+  bool get _isMarkdown => _displayPath.toLowerCase().endsWith('.md');
 
   @override
   void initState() {
@@ -62,21 +68,45 @@ class _BlobPageState extends State<BlobPage> {
     setState(() {
       _loading = true;
       _error = null;
+      _resolvedRef = null;
+      _resolvedPath = '';
     });
     final api = context.read<ApiClient>();
     try {
       _project ??= await api.getProject(_fullPath);
+      final resolved = await _resolveRouteRef(api);
       final blob = await api.blob(
         _fullPath,
-        ref: widget.gitRef,
-        path: widget.path,
+        ref: resolved.ref,
+        path: resolved.path,
       );
-      if (mounted) setState(() => _blob = blob);
+      if (mounted) {
+        setState(() {
+          _blob = blob;
+          _resolvedRef = resolved.ref;
+          _resolvedPath = resolved.path;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<ResolvedRefPath> _resolveRouteRef(ApiClient api) async {
+    final refs = <String>{};
+    try {
+      refs.addAll((await api.branches(_fullPath)).map((branch) => branch.name));
+    } catch (_) {
+      // Keep the page usable if refs cannot be listed.
+    }
+    try {
+      refs.addAll((await api.tags(_fullPath)).map((tag) => tag.name));
+    } catch (_) {
+      // Tags are optional for resolving blob URLs.
+    }
+    return resolveRefPath(_routeTail, refs);
   }
 
   @override
@@ -90,10 +120,12 @@ class _BlobPageState extends State<BlobPage> {
     if (_project == null) {
       return const PageShell(child: Loading());
     }
+    final ref = _resolvedRef ?? widget.gitRef;
+    final path = _displayPath;
     return ProjectScaffold(
       project: _project!,
       selected: ProjectTab.code,
-      archiveRef: widget.gitRef,
+      archiveRef: ref,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -102,12 +134,12 @@ class _BlobPageState extends State<BlobPage> {
               Expanded(
                 child: PathBreadcrumbs(
                   fullPath: _fullPath,
-                  gitRef: widget.gitRef,
-                  path: widget.path,
+                  gitRef: ref,
+                  path: path,
                 ),
               ),
               Text(
-                'Raw: ${api.rawUrl(_fullPath, ref: widget.gitRef, path: widget.path)}',
+                'Raw: ${api.rawUrl(_fullPath, ref: ref, path: path)}',
                 style: Theme.of(context).textTheme.bodySmall,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -121,7 +153,7 @@ class _BlobPageState extends State<BlobPage> {
           else if (_blob!.binary)
             _BinaryPlaceholder(size: _blob!.size)
           else if (_isMarkdown)
-            MarkdownView(data: _blob!.text ?? '', title: widget.path)
+            MarkdownView(data: _blob!.text ?? '', title: path)
           else
             _CodeView(content: _blob!.text ?? '', size: _blob!.size),
         ],

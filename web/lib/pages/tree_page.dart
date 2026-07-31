@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart' as models;
+import '../api/ref_resolution.dart';
 import '../widgets/error_view.dart';
 import '../widgets/file_tree_list.dart';
 import '../widgets/latest_commit_header.dart';
@@ -36,10 +37,14 @@ class _TreePageState extends State<TreePage> {
   List<models.TreeEntry> _entries = const [];
   models.CommitInfo? _latestCommit;
   int _commitCount = 0;
+  String? _resolvedRef;
+  String _resolvedPath = '';
   Object? _error;
   bool _loading = true;
 
   String get _fullPath => '${widget.ns}/${widget.proj}';
+  String get _routeTail =>
+      widget.path.isEmpty ? widget.gitRef : '${widget.gitRef}/${widget.path}';
 
   @override
   void initState() {
@@ -62,14 +67,17 @@ class _TreePageState extends State<TreePage> {
     setState(() {
       _loading = true;
       _error = null;
+      _resolvedRef = null;
+      _resolvedPath = '';
     });
     final api = context.read<ApiClient>();
     try {
       _project ??= await api.getProject(_fullPath);
+      final resolved = await _resolveRouteRef(api);
       final results = await Future.wait<Object?>([
-        api.tree(_fullPath, ref: widget.gitRef, path: widget.path),
+        api.tree(_fullPath, ref: resolved.ref, path: resolved.path),
         api
-            .commits(_fullPath, ref: widget.gitRef, perPage: 1)
+            .commits(_fullPath, ref: resolved.ref, perPage: 1)
             .catchError(
               (_) => const models.Paged<models.CommitInfo>(
                 items: <models.CommitInfo>[],
@@ -85,12 +93,29 @@ class _TreePageState extends State<TreePage> {
         _entries = page.items;
         _latestCommit = commits.items.isEmpty ? null : commits.items.first;
         _commitCount = commits.total;
+        _resolvedRef = resolved.ref;
+        _resolvedPath = resolved.path;
       });
     } catch (e) {
       if (mounted) setState(() => _error = e);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<ResolvedRefPath> _resolveRouteRef(ApiClient api) async {
+    final refs = <String>{};
+    try {
+      refs.addAll((await api.branches(_fullPath)).map((branch) => branch.name));
+    } catch (_) {
+      // Keep the page usable if a repository does not expose refs yet.
+    }
+    try {
+      refs.addAll((await api.tags(_fullPath)).map((tag) => tag.name));
+    } catch (_) {
+      // Tags are optional for resolving tree URLs.
+    }
+    return resolveRefPath(_routeTail, refs);
   }
 
   @override
@@ -103,18 +128,16 @@ class _TreePageState extends State<TreePage> {
     if (_project == null) {
       return const PageShell(child: Loading());
     }
+    final ref = _resolvedRef ?? widget.gitRef;
+    final path = _resolvedRef == null ? widget.path : _resolvedPath;
     return ProjectScaffold(
       project: _project!,
       selected: ProjectTab.code,
-      archiveRef: widget.gitRef,
+      archiveRef: ref,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          PathBreadcrumbs(
-            fullPath: _fullPath,
-            gitRef: widget.gitRef,
-            path: widget.path,
-          ),
+          PathBreadcrumbs(fullPath: _fullPath, gitRef: ref, path: path),
           const SizedBox(height: 10),
           if (_loading)
             const Loading()
@@ -128,13 +151,12 @@ class _TreePageState extends State<TreePage> {
                   ? null
                   : () =>
                         context.go('/$_fullPath/commit/${_latestCommit!.sha}'),
-              onHistoryTap: () =>
-                  context.go('/$_fullPath/commits/${widget.gitRef}'),
+              onHistoryTap: () => context.go('/$_fullPath/commits/$ref'),
             ),
             FileTreeList(
               entries: _entries,
               projectFullPath: _fullPath,
-              ref: widget.gitRef,
+              ref: ref,
               hasHeader: true,
             ),
           ],

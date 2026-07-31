@@ -6,6 +6,7 @@ import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 import 'package:rgit_web/api/client.dart';
 import 'package:rgit_web/api/models.dart';
+import 'package:rgit_web/api/ref_resolution.dart';
 import 'package:rgit_web/app.dart';
 import 'package:rgit_web/pages/tree_page.dart';
 import 'package:rgit_web/state/session.dart';
@@ -331,6 +332,93 @@ void main() {
     expect(find.text('2026-07-21 11:04:05'), findsOneWidget);
     expect(find.text('34 Commits'), findsOneWidget);
     expect(find.text('config.toml'), findsOneWidget);
+  });
+
+  testWidgets('tree routes resolve branch names containing slashes', (
+    tester,
+  ) async {
+    final api = ApiClient(
+      httpClient: MockClient((request) async {
+        final path = request.url.path;
+        if (path.endsWith('/user')) {
+          return http.Response('{}', 401);
+        }
+        if (path.endsWith('/projects/ns%2Fproj')) {
+          return http.Response(
+            '{"id":1,"namespace_id":1,"name":"Proj","path":"proj",'
+            '"full_path":"ns/proj","namespace_path":"ns","visibility":0,'
+            '"archived":false,"default_branch":"main"}',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (path.endsWith('/repository/branches')) {
+          return http.Response(
+            '[{"name":"feature/platform-cli-cdp-backends",'
+            '"sha":"abcdef0123456789"}]',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (path.endsWith('/repository/tags')) {
+          return http.Response(
+            '[]',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (path.endsWith('/repository/tree')) {
+          expect(
+            request.url.queryParameters['ref'],
+            'feature/platform-cli-cdp-backends',
+          );
+          expect(request.url.queryParameters['path'], 'scripts');
+          return http.Response(
+            '[{"name":"deploy.sh","path":"scripts/deploy.sh","kind":"blob"}]',
+            200,
+            headers: {'content-type': 'application/json', 'x-total': '1'},
+          );
+        }
+        if (path.endsWith('/repository/commits')) {
+          expect(
+            request.url.queryParameters['ref'],
+            'feature/platform-cli-cdp-backends',
+          );
+          return http.Response(
+            '[{"sha":"abcdef0123456789","message":"fix scripts\\n",'
+            '"author_name":"dev","author_email":"dev@example.test",'
+            '"authored_at":"2026-07-21T03:04:05+00:00","parents":[]}]',
+            200,
+            headers: {'content-type': 'application/json', 'x-total': '2'},
+          );
+        }
+        return http.Response('{}', 404);
+      }),
+      origin: Uri.parse('https://rgit.example.test/'),
+    );
+
+    await tester.pumpWidget(
+      _appWithApi(
+        '/ns/proj/tree/feature/platform-cli-cdp-backends/scripts',
+        api,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('feature/platform-cli-cdp-backends'), findsOneWidget);
+    expect(find.text('scripts'), findsOneWidget);
+    expect(find.text('deploy.sh'), findsOneWidget);
+  });
+
+  test('ref resolver prefers the longest known branch name', () {
+    final resolved = resolveRefPath('feature/foo/bar/scripts', [
+      'feature/foo',
+      'feature/foo/bar',
+      'feature',
+    ]);
+
+    expect(resolved.ref, 'feature/foo/bar');
+    expect(resolved.path, 'scripts');
   });
 
   test('project preserves server-configured clone URLs', () {
