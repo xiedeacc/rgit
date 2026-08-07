@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart' as models;
 import '../theme.dart';
+import '../widgets/commit_diff_view.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading.dart';
 import '../widgets/project_scaffold.dart';
@@ -110,12 +112,26 @@ class _CommitPageState extends State<CommitPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _commit!.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _commit!.title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            context.go('/$_fullPath/tree/${_commit!.sha}'),
+                        icon: const Icon(Icons.code, size: 18),
+                        label: const Text('Browse files'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -148,20 +164,7 @@ class _CommitPageState extends State<CommitPage> {
             ),
             const SizedBox(height: 16),
             if (_diff != null && _diff!.isNotEmpty)
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  border: Border.all(color: border),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: SelectableText(_diff!, style: RgitTheme.mono),
-                  ),
-                ),
-              )
+              CommitDiffView(diff: _diff!)
             else
               const Text('No diff available.'),
           ],

@@ -214,7 +214,7 @@ pub async fn commit_diff(cfg: &GitConfig, repo: &Path, sha: &str) -> Result<Vec<
     check_arg(sha)?;
     run_git_limited(
         cfg,
-        &["diff-tree", "-p", "--root", "--no-commit-id", sha],
+        &["diff-tree", "-r", "-p", "--root", "--no-commit-id", sha],
         Some(repo),
         DIFF_OUTPUT_LIMIT,
     )

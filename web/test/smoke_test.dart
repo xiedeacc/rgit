@@ -11,6 +11,7 @@ import 'package:rgit_web/app.dart';
 import 'package:rgit_web/pages/tree_page.dart';
 import 'package:rgit_web/state/session.dart';
 import 'package:rgit_web/widgets/clone_url_box.dart';
+import 'package:rgit_web/widgets/commit_diff_view.dart';
 import 'package:rgit_web/widgets/top_nav.dart';
 
 Widget _app(String location) {
@@ -419,6 +420,100 @@ void main() {
 
     expect(resolved.ref, 'feature/foo/bar');
     expect(resolved.path, 'scripts');
+  });
+
+  test('unified diff parser splits changed files', () {
+    final files = parseUnifiedDiff('''
+diff --git a/Cargo.lock b/Cargo.lock
+index 1111111..2222222 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1 +1 @@
+-old
++new
+diff --git a/src/main.rs b/src/main.rs
+index 3333333..4444444 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -2,0 +3 @@
++println!("hi");
+''');
+
+    expect(files, hasLength(2));
+    expect(files[0].path, 'Cargo.lock');
+    expect(files[0].added, 1);
+    expect(files[0].removed, 1);
+    expect(files[1].path, 'src/main.rs');
+    expect(files[1].added, 1);
+    expect(files[1].removed, 0);
+  });
+
+  testWidgets('commit pages show every changed file separately', (
+    tester,
+  ) async {
+    final api = ApiClient(
+      httpClient: MockClient((request) async {
+        final path = request.url.path;
+        if (path.endsWith('/user')) {
+          return http.Response('{}', 401);
+        }
+        if (path.endsWith('/projects/ns%2Fproj')) {
+          return http.Response(
+            '{"id":1,"namespace_id":1,"name":"Proj","path":"proj",'
+            '"full_path":"ns/proj","namespace_path":"ns","visibility":0,'
+            '"archived":false,"default_branch":"main"}',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (path.endsWith('/repository/commits/abcdef1234567890')) {
+          return http.Response(
+            '{"sha":"abcdef1234567890","message":"touch files\\n",'
+            '"author_name":"dev","author_email":"dev@example.test",'
+            '"authored_at":"2026-07-21T12:00:00+00:00",'
+            '"parents":["1111111111111111"]}',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (path.endsWith('/repository/diff/abcdef1234567890')) {
+          return http.Response(
+            '''
+diff --git a/Cargo.lock b/Cargo.lock
+index 1111111..2222222 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1 +1 @@
+-old
++new
+diff --git a/src/main.rs b/src/main.rs
+index 3333333..4444444 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -2,0 +3 @@
++println!("hi");
+''',
+            200,
+            headers: {'content-type': 'text/plain; charset=utf-8'},
+          );
+        }
+        return http.Response('{}', 404);
+      }),
+      origin: Uri.parse('https://rgit.example.test/'),
+    );
+
+    await tester.pumpWidget(
+      _appWithApi('/ns/proj/commit/abcdef1234567890', api),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('2 changed files with 2 additions and 1 deletions'),
+      findsOneWidget,
+    );
+    expect(find.text('Browse files'), findsOneWidget);
+    expect(find.text('Cargo.lock'), findsOneWidget);
+    expect(find.text('src/main.rs'), findsOneWidget);
   });
 
   test('project preserves server-configured clone URLs', () {
