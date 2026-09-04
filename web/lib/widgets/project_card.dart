@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:web/web.dart' as web;
 
 import '../api/models.dart' as models;
 
@@ -48,10 +48,16 @@ class ProjectCard extends StatelessWidget {
             ? null
             : Text(project.description,
                 maxLines: 2, overflow: TextOverflow.ellipsis),
-        onTap: () => context.go('/${project.fullPath}'),
+        onTap: () => _openInNewTab('/${project.fullPath}'),
       ),
     );
   }
+}
+
+/// Opens [path] in a new browser tab so the list page stays where it is.
+void _openInNewTab(String path) {
+  // Relative paths resolve against the current origin (path URL strategy).
+  web.window.open(path, '_blank');
 }
 
 class _Chip extends StatelessWidget {
